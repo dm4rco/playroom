@@ -305,6 +305,24 @@ html, body {
 .lightbox__meta { display: flex; gap: 14px; align-items: center; color: var(--text); font-size: 15px; }
 .lightbox__meta a { color: var(--accent-hover); }
 
+/* Floating card preview shown on hover in the playtester */
+.card-hover-preview {
+  display: none;
+  position: fixed;
+  z-index: 310;
+  pointer-events: none;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.card-hover-preview.open { display: block; }
+.card-hover-preview img {
+  display: block;
+  width: 280px;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+}
+
 /* Playtest launcher button */
 .playtest-btn {
   position: fixed;

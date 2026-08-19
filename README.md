@@ -66,10 +66,11 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   target) even after the commander is cast, so you can drag or click it
   back. Rendered with Preact+htm loaded from a CDN as ES modules (no build
   step, no npm — still just static files pushed to GitHub Pages).
-  - Click a hand card to view it full-size — moving it is drag-only. Click a
-    battlefield card to tap/untap it (rotates 90°, and battlefield slots
-    always reserve room for the rotation so nothing jumps around). Click your
-    commander in the Command Zone to cast it.
+  - Hover any card, anywhere, to see it full-size in a floating preview next
+    to your cursor — no clicking required. Click a hand card to play it,
+    click a battlefield card to tap/untap it (rotates 90°, and battlefield
+    slots always reserve room for the rotation so nothing jumps around),
+    click your commander in the Command Zone to cast it.
   - The Hand caps at ~2 rows and scrolls internally beyond that, so drawing a
     lot of cards doesn't push the rest of the board out of reach. Sort
     buttons (CMC / Type / Name) in the Hand header reorder it on demand.
@@ -80,12 +81,13 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     tokens or a handful of basics don't blow the row out — consecutive
     copies of the *same* card overlap much tighter than usual (you don't
     need to see all 10 Mountains clearly, just that they're there). Hover a
-    card to bring it fully to the front.
+    card to bring it fully to the front (and see the full-size preview).
   - Click the Library pile to draw, or double-click it (or the Bottom strip)
-    to browse every card in it — for tutors. Click the Graveyard, Exile, or
-    Tokens pile once to browse it — for recursion or making tokens. Click a
-    card in that view to play it to the battlefield (it stays open so you
-    can grab more than one); double-click one to preview it. Closing the
+    to browse every card in it — for tutors (Library is the one zone that
+    still uses double-click, since single-click there already means draw).
+    Click the Graveyard, Exile, or Tokens pile once to browse it — for
+    recursion or making tokens. Click a card in that view to play it to the
+    battlefield (it stays open so you can grab more than one). Closing the
     Library browser (or switching to browse a different zone) always
     reshuffles it, since you just searched it.
   - The Tokens pile (below the Command Zone) lists every token your deck can

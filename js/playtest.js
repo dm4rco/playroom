@@ -6,9 +6,52 @@
 import { h, render as preactRender } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { openLightbox } from './render.js';
 
 const html = htm.bind(h);
+const PREVIEW_OFFSET = 20;
+
+// Floating full-size preview shown while hovering any card — a single
+// reused DOM node updated directly (bypassing Preact) since mousemove needs
+// to stay smooth and doesn't need to go through a re-render.
+function ensurePreviewEl() {
+  let el = document.getElementById('card-hover-preview');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'card-hover-preview';
+    el.className = 'card-hover-preview';
+    el.appendChild(document.createElement('img'));
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function positionPreview(el, x, y) {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w = el.offsetWidth || 280, h = el.offsetHeight || 391;
+  let left = x + PREVIEW_OFFSET;
+  let top = y + PREVIEW_OFFSET;
+  if (left + w > vw) left = x - w - PREVIEW_OFFSET;
+  if (top + h > vh) top = Math.max(10, vh - h - 10);
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+
+function showCardPreview(src, x, y) {
+  const el = ensurePreviewEl();
+  const img = el.querySelector('img');
+  if (img.src !== src) img.src = src;
+  positionPreview(el, x, y);
+  el.classList.add('open');
+}
+
+function moveCardPreview(x, y) {
+  const el = document.getElementById('card-hover-preview');
+  if (el && el.classList.contains('open')) positionPreview(el, x, y);
+}
+
+function hideCardPreview() {
+  document.getElementById('card-hover-preview')?.classList.remove('open');
+}
 
 const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'];
 const MAX_HISTORY = 50;
@@ -153,8 +196,9 @@ function snapshot(state) {
 
 // ---------- Rendering (Preact) ----------
 
-function CardTile({ c, onClick, onDblClick, onDragStart, tight }) {
-  const img = c.data.image_small || c.data.image;
+function CardTile({ c, onClick, onDragStart, tight }) {
+  const smallImg = c.data.image_small || c.data.image;
+  const fullImg = c.data.image || c.data.image_small;
   return html`
     <div class=${`playtest__card-slot${tight ? ' playtest__card-slot--tight' : ''}`} key=${c.uid}>
       <div
@@ -163,10 +207,12 @@ function CardTile({ c, onClick, onDblClick, onDragStart, tight }) {
         title=${c.name}
         data-uid=${c.uid}
         onClick=${onClick}
-        onDblClick=${onDblClick}
         onDragStart=${onDragStart}
+        onMouseEnter=${(e) => showCardPreview(fullImg, e.clientX, e.clientY)}
+        onMouseMove=${(e) => moveCardPreview(e.clientX, e.clientY)}
+        onMouseLeave=${() => hideCardPreview()}
       >
-        <img loading="lazy" src=${img} alt=${c.name} />
+        <img loading="lazy" src=${smallImg} alt=${c.name} />
       </div>
     </div>
   `;
@@ -179,12 +225,21 @@ function withStackTightness(cards) {
   return cards.map((c, i) => ({ card: c, tight: i > 0 && cards[i - 1].name === c.name }));
 }
 
-function TokenTile({ t, onClick, onDblClick }) {
-  const img = t.data.image_small || t.data.image;
+function TokenTile({ t, onClick }) {
+  const smallImg = t.data.image_small || t.data.image;
+  const fullImg = t.data.image || t.data.image_small;
   return html`
     <div class="playtest__card-slot" key=${t.name}>
-      <div class="playtest__card" title=${t.name} data-token-name=${t.name} onClick=${onClick} onDblClick=${onDblClick}>
-        <img loading="lazy" src=${img} alt=${t.name} />
+      <div
+        class="playtest__card"
+        title=${t.name}
+        data-token-name=${t.name}
+        onClick=${onClick}
+        onMouseEnter=${(e) => showCardPreview(fullImg, e.clientX, e.clientY)}
+        onMouseMove=${(e) => moveCardPreview(e.clientX, e.clientY)}
+        onMouseLeave=${() => hideCardPreview()}
+      >
+        <img loading="lazy" src=${smallImg} alt=${t.name} />
       </div>
     </div>
   `;
@@ -196,7 +251,7 @@ function App({ deck, overlay, onExit }) {
   const stateRef = useRef(state);
   stateRef.current = state;
   const undoStack = useRef([]);
-  const pendingClick = useRef(null); // { id, uid }
+  const pendingClick = useRef(null); // { id, uid } — only used to debounce the Library pile's click-to-draw vs. double-click-to-browse
   const draggedUid = useRef(null);
   const deckTokens = deck.tokens || [];
 
@@ -212,15 +267,6 @@ function App({ deck, overlay, onExit }) {
     setState(undoStack.current.pop());
   };
 
-  const openCardLightbox = (card) => {
-    openLightbox({
-      full: card.data.image || card.data.image_small,
-      uri: card.data.scryfall_uri,
-      name: card.name,
-      price: '',
-    });
-  };
-
   const setBrowsingZone = (newZone) => {
     if (browsingZone === 'library' && newZone !== 'library') {
       pushHistory();
@@ -230,12 +276,15 @@ function App({ deck, overlay, onExit }) {
     setBrowsingZoneState(newZone);
   };
 
+  // Hovering shows the full-size preview (see CardTile/TokenTile), so a
+  // click's only job is the zone's primary action — no double-click
+  // ambiguity to debounce, so every click fires immediately.
   const handleCardClick = (uid) => {
     const located = locateCard(stateRef.current, uid);
     if (!located) return;
     const { zone: fromZone, card } = located;
 
-    if (fromZone === 'command') {
+    if (fromZone === 'hand' || fromZone === 'command') {
       pushHistory();
       moveCard(stateRef.current, uid, 'battlefield');
       commit();
@@ -250,35 +299,9 @@ function App({ deck, overlay, onExit }) {
     }
   };
 
-  // Debounced single-click (vs. double-click preview), shared by
-  // command/battlefield/browsed-zone cards.
   const onCardClick = (uid) => (e) => {
     e.stopPropagation();
-    if (pendingClick.current && pendingClick.current.uid === uid) {
-      clearTimeout(pendingClick.current.id);
-      pendingClick.current = null;
-      return;
-    }
-    const id = setTimeout(() => {
-      pendingClick.current = null;
-      handleCardClick(uid);
-    }, DBLCLICK_WINDOW);
-    pendingClick.current = { id, uid };
-  };
-
-  const onCardDblClick = (uid, card) => (e) => {
-    e.stopPropagation();
-    if (pendingClick.current && pendingClick.current.uid === uid) {
-      clearTimeout(pendingClick.current.id);
-      pendingClick.current = null;
-    }
-    openCardLightbox(card);
-  };
-
-  // Hand cards: click always previews, immediately — no debounce needed.
-  const onHandCardClick = (card) => (e) => {
-    e.stopPropagation();
-    openCardLightbox(card);
+    handleCardClick(uid);
   };
 
   const onTokenClick = (template) => (e) => {
@@ -288,12 +311,8 @@ function App({ deck, overlay, onExit }) {
     commit();
   };
 
-  const onTokenDblClick = (template) => (e) => {
-    e.stopPropagation();
-    openCardLightbox(template);
-  };
-
   const onDragStart = (uid) => (e) => {
+    hideCardPreview();
     draggedUid.current = uid;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', uid);
@@ -401,7 +420,7 @@ function App({ deck, overlay, onExit }) {
       </div>
     </div>
 
-    <div class="playtest__hint">Hand: click to view, drag to play. Battlefield: click to tap/untap. Command Zone: click a card to play it. Library: click to draw, double-click to browse. Graveyard / Exile / Tokens: click to browse. Drag any card to any zone. Space: draw a card. Arrow keys: turn (←→), life (↑↓). Browser Back: undo.</div>
+    <div class="playtest__hint">Hover any card to see it full-size. Hand: click to play. Battlefield: click to tap/untap. Command Zone: click a card to play it. Library: click to draw, double-click to browse. Graveyard / Exile / Tokens: click to browse. Drag any card to any zone. Space: draw a card. Arrow keys: turn (←→), life (↑↓). Browser Back: undo.</div>
 
     <div class="playtest__board">
       <div class="playtest__leftcol">
@@ -410,7 +429,7 @@ function App({ deck, overlay, onExit }) {
             <h4>Command Zone</h4>
             <div class="playtest__cards">
               ${state.command.length
-                ? state.command.map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDblClick=${onCardDblClick(c.uid, c)} onDragStart=${onDragStart(c.uid)} />`)
+                ? state.command.map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} />`)
                 : html`<span class="playtest__empty-hint">Empty — click or drag your commander here.</span>`}
             </div>
           </div>
@@ -427,19 +446,19 @@ function App({ deck, overlay, onExit }) {
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Creatures</span>
           <div class="playtest__cards">
-            ${withStackTightness(creatures).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDblClick=${onCardDblClick(c.uid, c)} onDragStart=${onDragStart(c.uid)} />`)}
+            ${withStackTightness(creatures).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} />`)}
           </div>
         </div>
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Other</span>
           <div class="playtest__cards">
-            ${withStackTightness(others).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDblClick=${onCardDblClick(c.uid, c)} onDragStart=${onDragStart(c.uid)} />`)}
+            ${withStackTightness(others).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} />`)}
           </div>
         </div>
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Lands</span>
           <div class="playtest__cards">
-            ${withStackTightness(lands).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDblClick=${onCardDblClick(c.uid, c)} onDragStart=${onDragStart(c.uid)} />`)}
+            ${withStackTightness(lands).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} />`)}
           </div>
         </div>
       </div>
@@ -476,7 +495,7 @@ function App({ deck, overlay, onExit }) {
       </h4>
       <div class="playtest__cards playtest__cards--hand">
         ${state.hand.length
-          ? state.hand.map(c => html`<${CardTile} c=${c} onClick=${onHandCardClick(c)} onDblClick=${onHandCardClick(c)} onDragStart=${onDragStart(c.uid)} />`)
+          ? state.hand.map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} />`)
           : html`<span class="playtest__empty-hint">No cards in hand.</span>`}
       </div>
     </div>
@@ -491,10 +510,10 @@ function App({ deck, overlay, onExit }) {
           <div class="playtest__cards">
             ${browsingZone === 'tokens'
               ? (deckTokens.length
-                  ? deckTokens.map(t => html`<${TokenTile} t=${t} onClick=${onTokenClick(t)} onDblClick=${onTokenDblClick(t)} />`)
+                  ? deckTokens.map(t => html`<${TokenTile} t=${t} onClick=${onTokenClick(t)} />`)
                   : html`<span class="playtest__empty-hint">No tokens found for this deck.</span>`)
               : (state[browsingZone].length
-                  ? state[browsingZone].map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDblClick=${onCardDblClick(c.uid, c)} onDragStart=${onDragStart(c.uid)} />`)
+                  ? state[browsingZone].map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} />`)
                   : html`<span class="playtest__empty-hint">Nothing here.</span>`)}
           </div>
         </div>
