@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDH Deck Viewer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__header">
+        <h1>EDH Decks</h1>
+        <button id="new-deck-btn" class="btn btn--primary">+ New Deck</button>
+      </div>
+      <ul id="deck-list" class="deck-list"></ul>
+    </aside>
+
+    <main class="content">
+      <div id="import-panel" class="import-panel hidden">
+        <h2>Import Decklist</h2>
+        <p class="hint">Paste your decklist below, in the format:<br>
+          <code>1x Card Name (set) 123 *F* [Category]</code></p>
+        <input id="import-name" type="text" placeholder="Deck name (auto-detected from commander if left blank)">
+        <textarea id="import-text" rows="16" placeholder="1x Aang's Defense (tle) 211 *F* [Draw]&#10;1x Blood Crypt (trk) 278 [Land]&#10;..."></textarea>
+        <div class="import-panel__actions">
+          <button id="import-submit" class="btn btn--primary">Import</button>
+          <button id="import-cancel" class="btn">Cancel</button>
+          <span id="import-status" class="import-status"></span>
+        </div>
+      </div>
+
+      <div id="empty-state" class="empty-state hidden">
+        <h2>No deck selected</h2>
+        <p>Click <strong>+ New Deck</strong> to paste a decklist and get started.</p>
+      </div>
+
+      <div id="deck-actions" class="deck-actions hidden">
+        <button id="refresh-btn" class="btn">Refresh Card Data</button>
+        <button id="rename-btn" class="btn">Rename</button>
+        <button id="delete-btn" class="btn btn--danger">Delete</button>
+      </div>
+
+      <div id="main" class="deck-main hidden"></div>
+    </main>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
