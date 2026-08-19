@@ -287,7 +287,7 @@ html, body {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.8);
-  z-index: 100;
+  z-index: 300;
   align-items: center;
   justify-content: center;
 }
@@ -458,3 +458,40 @@ html, body {
 }
 .playtest__banner strong { color: var(--accent-hover); }
 .playtest__empty-hint { color: var(--text-dim); font-size: 13px; }
+
+/* Zone browser (Library/Graveyard/Exile — tutor/recursion view) */
+.zone-browser {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.zone-browser__panel {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  max-width: 1100px;
+  max-height: 100%;
+  width: 100%;
+  overflow-y: auto;
+}
+.zone-browser__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.zone-browser__header h3 {
+  margin: 0;
+  font-size: 18px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.zone-browser__header .count { color: var(--text-dim); font-size: 14px; font-weight: 400; }

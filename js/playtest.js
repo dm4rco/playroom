@@ -5,6 +5,8 @@ const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
 const OPENING_BOTTOM_COUNT = 3;
 const DBLCLICK_WINDOW = 250;
+const BROWSABLE_ZONES = { library: 'Library', graveyard: 'Graveyard', exile: 'Exile' };
+const DRAW_PILE_KEY = '__draw-pile__';
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -151,6 +153,7 @@ export function openPlaytest(deck, overlay) {
   const undoStack = [];
   let pendingClick = null; // { id, uid } for the debounced single click awaiting a possible double-click
   let draggedUid = null;
+  let browsingZone = null; // 'library' | 'graveyard' | 'exile' | null — which zone's full contents are on screen
 
   function pushHistory() {
     undoStack.push(snapshot(state));
@@ -160,6 +163,18 @@ export function openPlaytest(deck, overlay) {
   function undo() {
     if (!undoStack.length) return;
     state = undoStack.pop();
+  }
+
+  // Leaving a library browse (closing it, or switching to browse a
+  // different zone) always reshuffles — you searched your library, so per
+  // the rules it gets shuffled again, hiding the order you just revealed.
+  function setBrowsingZone(newZone) {
+    if (browsingZone === 'library' && newZone !== 'library') {
+      pushHistory();
+      state.library = stratifiedShuffle(state.library);
+    }
+    browsingZone = newZone;
+    render();
   }
 
   function render() {
@@ -192,7 +207,7 @@ export function openPlaytest(deck, overlay) {
         </div>
       ` : ''}
 
-      <div class="playtest__hint">Click: draw / play / tap. Double-click: view card. Drag: move to any zone. Arrow keys: turn (←→) and life (↑↓). Browser Back: undo.</div>
+      <div class="playtest__hint">Click: draw / play / tap. Double-click a card: view it. Double-click Library/Graveyard/Exile: browse all its cards (click one to play it to the battlefield). Drag: move to any zone. Arrow keys: turn (←→) and life (↑↓). Browser Back: undo.</div>
 
       <div class="playtest__board">
         ${state.hasCommander ? `
@@ -213,19 +228,19 @@ export function openPlaytest(deck, overlay) {
 
         <div class="playtest__sidezones">
           <div class="playtest__librarygroup">
-            <div class="playtest__pile playtest__pile--libtop" data-action="draw" data-dropzone="library-top" title="Top of Library — click to draw, drag here to place on top">
+            <div class="playtest__pile playtest__pile--libtop" data-action="draw" data-dropzone="library-top" data-browse="library" title="Top of Library — click to draw, double-click to browse, drag here to place on top">
               <strong>${state.library.length}</strong>
               Library
             </div>
-            <div class="playtest__pile playtest__pile--libbottom" data-dropzone="library-bottom" title="Bottom of Library — drag here to bottom-deck">
+            <div class="playtest__pile playtest__pile--libbottom" data-dropzone="library-bottom" data-browse="library" title="Bottom of Library — drag here to bottom-deck, double-click to browse">
               ↓ Bottom
             </div>
           </div>
-          <div class="playtest__pile playtest__pile--gy" data-dropzone="graveyard" title="Graveyard — drag a card here">
+          <div class="playtest__pile playtest__pile--gy" data-dropzone="graveyard" data-browse="graveyard" title="Graveyard — drag a card here, double-click to browse">
             <strong>${state.graveyard.length}</strong>
             Graveyard
           </div>
-          <div class="playtest__pile playtest__pile--exile" data-dropzone="exile" title="Exile — drag a card here">
+          <div class="playtest__pile playtest__pile--exile" data-dropzone="exile" data-browse="exile" title="Exile — drag a card here, double-click to browse">
             <strong>${state.exile.length}</strong>
             Exile
           </div>
@@ -238,6 +253,20 @@ export function openPlaytest(deck, overlay) {
           ${state.hand.length ? state.hand.map(cardEl).join('') : `<span class="playtest__empty-hint">No cards in hand.</span>`}
         </div>
       </div>
+
+      ${browsingZone ? `
+        <div class="zone-browser">
+          <div class="zone-browser__panel">
+            <div class="zone-browser__header">
+              <h3>${escapeHtml(BROWSABLE_ZONES[browsingZone])} <span class="count">${state[browsingZone].length}</span></h3>
+              <button class="btn btn--primary" data-action="close-browser">${browsingZone === 'library' ? 'Close & Shuffle' : 'Close'}</button>
+            </div>
+            <div class="playtest__cards">
+              ${state[browsingZone].length ? state[browsingZone].map(cardEl).join('') : `<span class="playtest__empty-hint">Nothing here.</span>`}
+            </div>
+          </div>
+        </div>
+      ` : ''}
     `;
   }
 
@@ -259,8 +288,12 @@ export function openPlaytest(deck, overlay) {
       pushHistory();
       card.tapped = !card.tapped;
       render();
+    } else if (browsingZone === fromZone) {
+      // Tutoring/recursion: clicking a card while browsing Library/Graveyard/Exile plays it.
+      pushHistory();
+      moveCard(state, uid, 'battlefield');
+      render();
     }
-    // Graveyard/exile cards have no click action — drag them out instead.
   }
 
   overlay.onclick = (e) => {
@@ -271,6 +304,26 @@ export function openPlaytest(deck, overlay) {
       const action = actionEl.dataset.action;
       if (action === 'undo') { undo(); render(); return; }
       if (action === 'exit') { cleanup(); overlay.classList.remove('open'); return; }
+      if (action === 'close-browser') { setBrowsingZone(null); return; }
+
+      if (action === 'draw' && actionEl.dataset.browse) {
+        // Only the library PILE (not the separate "Draw Card" button) is
+        // also a double-click target for browsing, so only it needs to
+        // debounce — otherwise two quick draws in a row would cancel out.
+        if (pendingClick && pendingClick.uid === DRAW_PILE_KEY) {
+          clearTimeout(pendingClick.id);
+          pendingClick = null;
+          return;
+        }
+        const id = setTimeout(() => {
+          pendingClick = null;
+          pushHistory();
+          drawN(state, 1);
+          render();
+        }, DBLCLICK_WINDOW);
+        pendingClick = { id, uid: DRAW_PILE_KEY };
+        return;
+      }
 
       pushHistory();
       if (action === 'draw') drawN(state, 1);
@@ -306,21 +359,31 @@ export function openPlaytest(deck, overlay) {
 
   overlay.ondblclick = (e) => {
     const clickedCardEl = e.target.closest('[data-uid]');
-    if (!clickedCardEl) return;
-    if (pendingClick && pendingClick.uid === clickedCardEl.dataset.uid) {
-      clearTimeout(pendingClick.id);
-      pendingClick = null;
+    if (clickedCardEl) {
+      if (pendingClick && pendingClick.uid === clickedCardEl.dataset.uid) {
+        clearTimeout(pendingClick.id);
+        pendingClick = null;
+      }
+      const located = locateCard(state, clickedCardEl.dataset.uid);
+      if (!located) return;
+      const { card } = located;
+      openLightbox({
+        full: card.data.image || card.data.image_small,
+        uri: card.data.scryfall_uri,
+        name: card.name,
+        price: '',
+      });
+      return;
     }
 
-    const located = locateCard(state, clickedCardEl.dataset.uid);
-    if (!located) return;
-    const { card } = located;
-    openLightbox({
-      full: card.data.image || card.data.image_small,
-      uri: card.data.scryfall_uri,
-      name: card.name,
-      price: '',
-    });
+    const pile = e.target.closest('[data-browse]');
+    if (pile) {
+      if (pendingClick && pendingClick.uid === DRAW_PILE_KEY) {
+        clearTimeout(pendingClick.id);
+        pendingClick = null;
+      }
+      setBrowsingZone(pile.dataset.browse);
+    }
   };
 
   overlay.ondragstart = (e) => {

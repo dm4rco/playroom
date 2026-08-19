@@ -61,7 +61,13 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   after the commander is cast, so you can drag or click it back.
   - Click a hand card to play it, click a battlefield card to tap/untap it
     (rotates 90°), click your commander in the Command Zone to cast it.
-  - Double-click any card to see it full-size.
+  - Double-click any visible card to see it full-size.
+  - Double-click the Library, Graveyard, or Exile pile to browse every card
+    in it — for tutor/recursion effects. Click a card in that view to play
+    it to the battlefield (it stays open so you can grab more than one);
+    double-click one to preview it. Closing the Library browser (or
+    switching to browse a different zone) always reshuffles it, since you
+    just searched it.
   - Drag any card onto any zone to place it exactly where you want,
     including dragging onto the Library's Top or Bottom strip.
   - Arrow keys: ←/→ adjust turn, ↑/↓ adjust life. The browser's Back button
