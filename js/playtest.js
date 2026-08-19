@@ -3,7 +3,6 @@ import { openLightbox } from './render.js';
 const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'];
 const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
-const OPENING_BOTTOM_COUNT = 3;
 const DBLCLICK_WINDOW = 250;
 const BROWSABLE_ZONES = { library: 'Library', graveyard: 'Graveyard', exile: 'Exile' };
 const DRAW_PILE_KEY = '__draw-pile__';
@@ -24,14 +23,14 @@ function primaryTypeOf(card) {
   return 'other';
 }
 
-// House rule: creatures land near the top of the library (drawn early),
-// lands sink to the bottom (drawn late), everything else shuffles in between.
-// Randomized within each tier, so it's not fully predictable.
-function stratifiedShuffle(cards) {
-  const creatures = shuffle(cards.filter(c => primaryTypeOf(c) === 'creature'));
-  const others = shuffle(cards.filter(c => primaryTypeOf(c) === 'other'));
-  const lands = shuffle(cards.filter(c => primaryTypeOf(c) === 'land'));
-  return [...creatures, ...others, ...lands];
+// Splits the battlefield into Creatures / Other / Lands for display, so
+// permanents are easy to scan at a glance instead of one undifferentiated pile.
+function battlefieldGroups(battlefield) {
+  return {
+    creatures: battlefield.filter(c => primaryTypeOf(c) === 'creature'),
+    others: battlefield.filter(c => primaryTypeOf(c) === 'other'),
+    lands: battlefield.filter(c => primaryTypeOf(c) === 'land'),
+  };
 }
 
 // Expands qty-based deck entries into individual card instances (one Mountain
@@ -57,14 +56,12 @@ function freshState(deck) {
     hasCommander: commanderCards.length > 0,
     life: 40,
     turn: 1,
-    library: stratifiedShuffle(expand(libraryCards)),
+    library: shuffle(expand(libraryCards)),
     hand: [],
     battlefield: [],
     graveyard: [],
     exile: [],
     command: expand(commanderCards, { commander: true }),
-    // >0 while resolving the "draw 10, put N on the bottom" opening hand rule.
-    bottomingRemaining: 0,
   };
 }
 
@@ -74,15 +71,9 @@ function drawN(state, n) {
   }
 }
 
-// House rule opening hand: draw 10, then the player bottoms 3 of them.
-function openingDraw(state) {
-  drawN(state, OPENING_HAND_SIZE);
-  state.bottomingRemaining = Math.min(OPENING_BOTTOM_COUNT, state.hand.length);
-}
-
 function resetGame(deck) {
   const state = freshState(deck);
-  openingDraw(state);
+  drawN(state, OPENING_HAND_SIZE);
   return state;
 }
 
@@ -95,10 +86,8 @@ function locateCard(state, uid) {
 }
 
 // Moves a card between zones. Library placement defaults to the top (next
-// draw); pass toBottom to put it on the bottom instead. Moving a card from
-// hand to library while an opening-hand bottoming is in progress counts
-// against that requirement. Tap state clears whenever a card enters or
-// leaves the battlefield.
+// draw); pass toBottom to put it on the bottom instead. Tap state clears
+// whenever a card enters or leaves the battlefield.
 function moveCard(state, uid, toZone, { toBottom = false } = {}) {
   const located = locateCard(state, uid);
   if (!located || located.zone === toZone) return false;
@@ -113,10 +102,6 @@ function moveCard(state, uid, toZone, { toBottom = false } = {}) {
     else state.library.unshift(card);
   } else {
     state[toZone].push(card);
-  }
-
-  if (fromZone === 'hand' && toZone === 'library' && state.bottomingRemaining > 0) {
-    state.bottomingRemaining--;
   }
   return true;
 }
@@ -133,7 +118,6 @@ function snapshot(state) {
     graveyard: [...state.graveyard],
     exile: [...state.exile],
     command: [...state.command],
-    bottomingRemaining: state.bottomingRemaining,
   };
 }
 
@@ -143,9 +127,15 @@ function escapeHtml(s) {
 
 function cardEl(c) {
   const img = c.data.image_small || c.data.image;
-  return `<div class="playtest__card${c.tapped ? ' tapped' : ''}" draggable="true" data-uid="${escapeHtml(c.uid)}" title="${escapeHtml(c.name)}">
-    <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(c.name)}">
+  return `<div class="playtest__card-slot">
+    <div class="playtest__card${c.tapped ? ' tapped' : ''}" draggable="true" data-uid="${escapeHtml(c.uid)}" title="${escapeHtml(c.name)}">
+      <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(c.name)}">
+    </div>
   </div>`;
+}
+
+function cardRow(cards) {
+  return cards.length ? cards.map(cardEl).join('') : '';
 }
 
 export function openPlaytest(deck, overlay) {
@@ -165,19 +155,30 @@ export function openPlaytest(deck, overlay) {
     state = undoStack.pop();
   }
 
+  function openCardLightbox(card) {
+    openLightbox({
+      full: card.data.image || card.data.image_small,
+      uri: card.data.scryfall_uri,
+      name: card.name,
+      price: '',
+    });
+  }
+
   // Leaving a library browse (closing it, or switching to browse a
   // different zone) always reshuffles — you searched your library, so per
   // the rules it gets shuffled again, hiding the order you just revealed.
   function setBrowsingZone(newZone) {
     if (browsingZone === 'library' && newZone !== 'library') {
       pushHistory();
-      state.library = stratifiedShuffle(state.library);
+      state.library = shuffle(state.library);
     }
     browsingZone = newZone;
     render();
   }
 
   function render() {
+    const { creatures, others, lands } = battlefieldGroups(state.battlefield);
+
     overlay.innerHTML = `
       <div class="playtest__topbar">
         <div class="playtest__title">${escapeHtml(state.deckName)} — Goldfish Test</div>
@@ -201,28 +202,32 @@ export function openPlaytest(deck, overlay) {
         </div>
       </div>
 
-      ${state.bottomingRemaining > 0 ? `
-        <div class="playtest__banner">
-          Opening hand: choose <strong>${state.bottomingRemaining}</strong> more card${state.bottomingRemaining === 1 ? '' : 's'} to put on the bottom of your library — click a hand card, or drag it onto the Library pile.
-        </div>
-      ` : ''}
-
-      <div class="playtest__hint">Click: draw / play / tap. Double-click a card: view it. Double-click Library/Graveyard/Exile: browse all its cards (click one to play it to the battlefield). Drag: move to any zone. Arrow keys: turn (←→) and life (↑↓). Browser Back: undo.</div>
+      <div class="playtest__hint">Hand: click to view, drag to play. Battlefield: click to tap/untap. Command Zone / Library / Graveyard / Exile: click a card to play it. Double-click Library/Graveyard/Exile to browse. Arrow keys: turn (←→), life (↑↓). Browser Back: undo.</div>
 
       <div class="playtest__board">
         ${state.hasCommander ? `
           <div class="playtest__zone playtest__zone--command" data-dropzone="command">
             <h4>Command Zone</h4>
             <div class="playtest__cards">
-              ${state.command.length ? state.command.map(cardEl).join('') : `<span class="playtest__empty-hint">Empty — click or drag your commander here.</span>`}
+              ${state.command.length ? cardRow(state.command) : `<span class="playtest__empty-hint">Empty — click or drag your commander here.</span>`}
             </div>
           </div>
         ` : ''}
 
         <div class="playtest__zone playtest__zone--battlefield" data-dropzone="battlefield">
           <h4>Battlefield <span class="count">${state.battlefield.length}</span></h4>
-          <div class="playtest__cards">
-            ${state.battlefield.length ? state.battlefield.map(cardEl).join('') : `<span class="playtest__empty-hint">Click or drag a card here to play it.</span>`}
+          ${state.battlefield.length ? '' : `<span class="playtest__empty-hint">Drag a card here to play it.</span>`}
+          <div class="playtest__battlefield-row">
+            <span class="playtest__battlefield-label">Creatures</span>
+            <div class="playtest__cards">${cardRow(creatures)}</div>
+          </div>
+          <div class="playtest__battlefield-row">
+            <span class="playtest__battlefield-label">Other</span>
+            <div class="playtest__cards">${cardRow(others)}</div>
+          </div>
+          <div class="playtest__battlefield-row">
+            <span class="playtest__battlefield-label">Lands</span>
+            <div class="playtest__cards">${cardRow(lands)}</div>
           </div>
         </div>
 
@@ -250,7 +255,7 @@ export function openPlaytest(deck, overlay) {
       <div class="playtest__zone playtest__zone--hand" data-dropzone="hand">
         <h4>Hand <span class="count">${state.hand.length}</span></h4>
         <div class="playtest__cards">
-          ${state.hand.length ? state.hand.map(cardEl).join('') : `<span class="playtest__empty-hint">No cards in hand.</span>`}
+          ${state.hand.length ? cardRow(state.hand) : `<span class="playtest__empty-hint">No cards in hand.</span>`}
         </div>
       </div>
 
@@ -262,7 +267,7 @@ export function openPlaytest(deck, overlay) {
               <button class="btn btn--primary" data-action="close-browser">${browsingZone === 'library' ? 'Close & Shuffle' : 'Close'}</button>
             </div>
             <div class="playtest__cards">
-              ${state[browsingZone].length ? state[browsingZone].map(cardEl).join('') : `<span class="playtest__empty-hint">Nothing here.</span>`}
+              ${state[browsingZone].length ? cardRow(state[browsingZone]) : `<span class="playtest__empty-hint">Nothing here.</span>`}
             </div>
           </div>
         </div>
@@ -275,12 +280,7 @@ export function openPlaytest(deck, overlay) {
     if (!located) return;
     const { zone: fromZone, card } = located;
 
-    if (fromZone === 'hand') {
-      pushHistory();
-      if (state.bottomingRemaining > 0) moveCard(state, uid, 'library', { toBottom: true });
-      else moveCard(state, uid, 'battlefield');
-      render();
-    } else if (fromZone === 'command') {
+    if (fromZone === 'command') {
       pushHistory();
       moveCard(state, uid, 'battlefield');
       render();
@@ -327,7 +327,7 @@ export function openPlaytest(deck, overlay) {
 
       pushHistory();
       if (action === 'draw') drawN(state, 1);
-      else if (action === 'shuffle') state.library = stratifiedShuffle(state.library);
+      else if (action === 'shuffle') state.library = shuffle(state.library);
       else if (action === 'mulligan' || action === 'newgame') state = resetGame(deck);
       else if (action === 'life-inc') state.life++;
       else if (action === 'life-dec') state.life--;
@@ -339,11 +339,18 @@ export function openPlaytest(deck, overlay) {
 
     if (clickedCardEl) {
       const uid = clickedCardEl.dataset.uid;
+      const located = locateCard(state, uid);
+
+      // Hand cards are single-purpose: a click always just previews them —
+      // moving them is drag-only, so there's no double-click ambiguity to debounce.
+      if (located && located.zone === 'hand') {
+        openCardLightbox(located.card);
+        return;
+      }
+
       // A second click on the SAME card within the window means this is a
       // double-click — let ondblclick handle it instead of also playing/
-      // tapping the card. Clicks on other cards schedule independently, so
-      // clicking through several different cards quickly (e.g. bottoming 3
-      // opening-hand cards) isn't mistaken for a double-click.
+      // tapping the card. Clicks on other cards schedule independently.
       if (pendingClick && pendingClick.uid === uid) {
         clearTimeout(pendingClick.id);
         pendingClick = null;
@@ -366,13 +373,7 @@ export function openPlaytest(deck, overlay) {
       }
       const located = locateCard(state, clickedCardEl.dataset.uid);
       if (!located) return;
-      const { card } = located;
-      openLightbox({
-        full: card.data.image || card.data.image_small,
-        uri: card.data.scryfall_uri,
-        name: card.name,
-        price: '',
-      });
+      openCardLightbox(located.card);
       return;
     }
 

@@ -59,9 +59,13 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   Hand, Battlefield, Graveyard, and Exile zones, plus a Command Zone if your
   deck has a commander — it stays on screen (as an empty drop target) even
   after the commander is cast, so you can drag or click it back.
-  - Click a hand card to play it, click a battlefield card to tap/untap it
-    (rotates 90°), click your commander in the Command Zone to cast it.
-  - Double-click any visible card to see it full-size.
+  - Click a hand card to view it full-size — moving it is drag-only. Click a
+    battlefield card to tap/untap it (rotates 90°, and battlefield slots
+    always reserve room for the rotation so nothing jumps around). Click your
+    commander in the Command Zone to cast it.
+  - The battlefield is split into Creatures / Other / Lands rows so permanents
+    are easy to scan; drop a card anywhere in the battlefield area and it
+    lands in the right row automatically.
   - Double-click the Library, Graveyard, or Exile pile to browse every card
     in it — for tutor/recursion effects. Click a card in that view to play
     it to the battlefield (it stays open so you can grab more than one);
@@ -72,11 +76,9 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     including dragging onto the Library's Top or Bottom strip.
   - Arrow keys: ←/→ adjust turn, ↑/↓ adjust life. The browser's Back button
     undoes the last action, same as the on-screen Undo button.
-- Opening hand follows a house mulligan rule: draw 10, then bottom 3 (click or
-  drag them onto the Library pile) to end up with 7. Both "New Game" and
-  "Mulligan" restart from a fresh shuffle and redo this draw. Shuffling
-  (including the initial deal) sorts creatures toward the top of the
-  library, lands toward the bottom, and everything else in between,
-  randomized within each group.
+- Opening hand is just a draw of 10, full stop — there's no forced mulligan
+  step. It's single-player testing, so do whatever you want with them (play
+  them, bottom some via drag, whatever). Both "New Game" and "Mulligan"
+  reshuffle the whole deck and redraw 10.
 - It's solitaire testing only — no rules enforcement, mana, or opponent.
   Drag-and-drop uses the native HTML5 API, so it's mouse-only (no touch).
