@@ -55,7 +55,13 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   allow browser requests from other sites). If that proxy is ever down, paste
   the decklist manually instead.
 - The "Playtest" button (top right, once a deck is loaded) opens a simple
-  goldfishing sandbox: shuffles the deck, draws an opening hand of 7, and lets
-  you click cards to draw/play/discard them, with basic life and turn
-  counters. It's solitaire testing only — no rules enforcement, mana, or
-  opponent.
+  goldfishing sandbox with Library/Hand/Battlefield/Graveyard/Exile zones (plus
+  a Command Zone if your deck has a commander). Click a card to move it along
+  its usual path (hand → battlefield → graveyard), or drag any card onto any
+  zone to place it exactly where you want — including dragging onto the
+  Library pile to bottom-deck it. Shuffle Library, Draw Card, Undo, and basic
+  life/turn counters are all there too.
+- Opening hand follows a house mulligan rule: draw 10, then bottom 3 (click or
+  drag them onto the Library pile) to end up with 7. Both "New Game" and
+  "Mulligan" restart from a fresh shuffle and redo this draw.
+- It's solitaire testing only — no rules enforcement, mana, or opponent.

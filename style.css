@@ -371,15 +371,20 @@ html, body {
   gap: 6px;
 }
 .playtest__zone h4 .count { font-weight: 400; }
-.playtest__zone--command { flex: 0 0 130px; }
+.playtest__zone--command { flex: 0 0 160px; }
+.playtest__zone--battlefield,
+.playtest__zone--hand,
+.playtest__zone--command {
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
 .playtest__zone--battlefield {
   background: var(--bg-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
-  min-height: 220px;
+  min-height: 260px;
 }
-.playtest__sidezones { flex: 0 0 130px; display: flex; flex-direction: column; gap: 14px; }
+.playtest__sidezones { flex: 0 0 160px; display: flex; flex-direction: column; gap: 14px; }
 .playtest__pile {
   aspect-ratio: 5/7;
   border: 2px dashed var(--border);
@@ -392,25 +397,29 @@ html, body {
   font-size: 13px;
   cursor: pointer;
   gap: 4px;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
 }
-.playtest__pile strong { font-size: 24px; color: var(--text); }
+.playtest__pile strong { font-size: 26px; color: var(--text); }
 .playtest__pile:hover { border-color: var(--accent); color: var(--text); }
-.playtest__pile--gy { cursor: default; }
-.playtest__pile--gy:hover { border-color: var(--border); color: var(--text-dim); }
+.playtest__pile--gy, .playtest__pile--exile { cursor: default; }
+.playtest__pile--gy:hover, .playtest__pile--exile:hover { border-color: var(--border); color: var(--text-dim); }
 
-.playtest__cards { display: flex; flex-wrap: wrap; gap: 8px; }
+.drop-hover { border-color: var(--accent) !important; background: rgba(124, 92, 255, 0.12); }
+
+.playtest__cards { display: flex; flex-wrap: wrap; gap: 10px; }
 .playtest__card {
-  width: 90px;
+  width: 130px;
   aspect-ratio: 5/7;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--border);
-  cursor: pointer;
+  cursor: grab;
   transition: transform 0.1s ease;
   flex-shrink: 0;
 }
 .playtest__card:hover { transform: translateY(-4px); border-color: var(--accent); }
-.playtest__card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.playtest__card:active { cursor: grabbing; }
+.playtest__card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .playtest__zone--hand {
   position: sticky;
   bottom: 0;
@@ -418,4 +427,14 @@ html, body {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
+.playtest__banner {
+  background: rgba(124, 92, 255, 0.12);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+.playtest__banner strong { color: var(--accent-hover); }
 .playtest__empty-hint { color: var(--text-dim); font-size: 13px; }
