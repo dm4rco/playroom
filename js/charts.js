@@ -15,25 +15,39 @@ export function paletteColor(i) {
 }
 
 export function barChart(data, { width = 480, height = 220, color = '#7c5cff', colorFn } = {}) {
-  const padding = 30;
+  const sidePad = 30;
+  const topPad = 30;
   const max = Math.max(1, ...data.map(d => d.value));
   const n = Math.max(1, data.length);
-  const barW = (width - padding * 2) / n;
+  const barW = (width - sidePad * 2) / n;
+
+  // Angle labels only when they'd actually overlap at this bar width — short
+  // labels (mana curve's "0".."7+") stay horizontal even with many bars,
+  // while long category names rotate once they no longer fit.
+  const maxLabelLen = Math.max(0, ...data.map(d => String(d.label).length));
+  const rotateLabels = maxLabelLen * 7 > barW * 0.9;
+  const bottomPad = rotateLabels ? 76 : 30;
+  const h = rotateLabels ? height + 46 : height;
 
   const bars = data.map((d, i) => {
-    const h = (d.value / max) * (height - padding * 2);
-    const x = padding + i * barW;
-    const y = height - padding - h;
+    const barH = (d.value / max) * (h - topPad - bottomPad);
+    const x = sidePad + i * barW;
+    const y = h - bottomPad - barH;
     const fill = colorFn ? colorFn(d, i) : color;
+    const labelX = x + barW / 2;
+    const labelY = h - bottomPad + (rotateLabels ? 10 : 16);
+    const label = rotateLabels
+      ? `<text x="${labelX}" y="${labelY}" text-anchor="end" transform="rotate(-45 ${labelX} ${labelY})" class="chart-label">${escapeXml(d.label)}</text>`
+      : `<text x="${labelX}" y="${labelY}" text-anchor="middle" class="chart-label">${escapeXml(d.label)}</text>`;
     return `
       <g>
-        <rect x="${x + barW * 0.15}" y="${y}" width="${barW * 0.7}" height="${Math.max(h, 1)}" rx="3" fill="${fill}"></rect>
-        <text x="${x + barW / 2}" y="${height - padding + 16}" text-anchor="middle" class="chart-label">${escapeXml(d.label)}</text>
-        <text x="${x + barW / 2}" y="${y - 6}" text-anchor="middle" class="chart-value">${d.value}</text>
+        <rect x="${x + barW * 0.15}" y="${y}" width="${barW * 0.7}" height="${Math.max(barH, 1)}" rx="3" fill="${fill}"><title>${escapeXml(d.label)}: ${d.value}</title></rect>
+        ${label}
+        <text x="${labelX}" y="${y - 6}" text-anchor="middle" class="chart-value">${d.value}</text>
       </g>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${width} ${height}" class="chart" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${h}" class="chart" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
 }
 
 export function donutChart(data, { size = 200, innerRatio = 0.55 } = {}) {
