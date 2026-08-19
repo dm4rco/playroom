@@ -55,13 +55,22 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   allow browser requests from other sites). If that proxy is ever down, paste
   the decklist manually instead.
 - The "Playtest" button (top right, once a deck is loaded) opens a simple
-  goldfishing sandbox with Library/Hand/Battlefield/Graveyard/Exile zones (plus
-  a Command Zone if your deck has a commander). Click a card to move it along
-  its usual path (hand → battlefield → graveyard), or drag any card onto any
-  zone to place it exactly where you want — including dragging onto the
-  Library pile to bottom-deck it. Shuffle Library, Draw Card, Undo, and basic
-  life/turn counters are all there too.
+  goldfishing sandbox with Library (split into Top/Bottom drop targets),
+  Hand, Battlefield, Graveyard, and Exile zones, plus a Command Zone if your
+  deck has a commander — it stays on screen (as an empty drop target) even
+  after the commander is cast, so you can drag or click it back.
+  - Click a hand card to play it, click a battlefield card to tap/untap it
+    (rotates 90°), click your commander in the Command Zone to cast it.
+  - Double-click any card to see it full-size.
+  - Drag any card onto any zone to place it exactly where you want,
+    including dragging onto the Library's Top or Bottom strip.
+  - Arrow keys: ←/→ adjust turn, ↑/↓ adjust life. The browser's Back button
+    undoes the last action, same as the on-screen Undo button.
 - Opening hand follows a house mulligan rule: draw 10, then bottom 3 (click or
   drag them onto the Library pile) to end up with 7. Both "New Game" and
-  "Mulligan" restart from a fresh shuffle and redo this draw.
+  "Mulligan" restart from a fresh shuffle and redo this draw. Shuffling
+  (including the initial deal) sorts creatures toward the top of the
+  library, lands toward the bottom, and everything else in between,
+  randomized within each group.
 - It's solitaire testing only — no rules enforcement, mana, or opponent.
+  Drag-and-drop uses the native HTML5 API, so it's mouse-only (no touch).

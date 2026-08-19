@@ -225,7 +225,7 @@ export function renderDeck(deck, root) {
   });
 }
 
-function openLightbox({ full, uri, name, price }) {
+export function openLightbox({ full, uri, name, price }) {
   let modal = document.getElementById('lightbox');
   if (!modal) {
     modal = document.createElement('div');

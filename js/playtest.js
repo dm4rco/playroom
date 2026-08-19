@@ -1,7 +1,10 @@
+import { openLightbox } from './render.js';
+
 const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'];
 const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
 const OPENING_BOTTOM_COUNT = 3;
+const DBLCLICK_WINDOW = 250;
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -10,6 +13,23 @@ function shuffle(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+function primaryTypeOf(card) {
+  const t = card.data?.type_line || '';
+  if (t.includes('Land')) return 'land';
+  if (t.includes('Creature')) return 'creature';
+  return 'other';
+}
+
+// House rule: creatures land near the top of the library (drawn early),
+// lands sink to the bottom (drawn late), everything else shuffles in between.
+// Randomized within each tier, so it's not fully predictable.
+function stratifiedShuffle(cards) {
+  const creatures = shuffle(cards.filter(c => primaryTypeOf(c) === 'creature'));
+  const others = shuffle(cards.filter(c => primaryTypeOf(c) === 'other'));
+  const lands = shuffle(cards.filter(c => primaryTypeOf(c) === 'land'));
+  return [...creatures, ...others, ...lands];
 }
 
 // Expands qty-based deck entries into individual card instances (one Mountain
@@ -21,7 +41,7 @@ function expand(cardList, { commander = false } = {}) {
   for (const c of cardList) {
     if (!c.data || c.data.notFound) continue;
     for (let i = 0; i < c.qty; i++) {
-      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander });
+      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander, tapped: false });
     }
   }
   return out;
@@ -32,9 +52,10 @@ function freshState(deck) {
   const libraryCards = deck.cards.filter(c => !c.isCommander);
   return {
     deckName: deck.name,
+    hasCommander: commanderCards.length > 0,
     life: 40,
     turn: 1,
-    library: shuffle(expand(libraryCards)),
+    library: stratifiedShuffle(expand(libraryCards)),
     hand: [],
     battlefield: [],
     graveyard: [],
@@ -63,9 +84,10 @@ function resetGame(deck) {
   return state;
 }
 
-function findZoneOf(state, uid) {
+function locateCard(state, uid) {
   for (const zone of ZONES) {
-    if (state[zone].some(c => c.uid === uid)) return zone;
+    const card = state[zone].find(c => c.uid === uid);
+    if (card) return { zone, card };
   }
   return null;
 }
@@ -73,13 +95,16 @@ function findZoneOf(state, uid) {
 // Moves a card between zones. Library placement defaults to the top (next
 // draw); pass toBottom to put it on the bottom instead. Moving a card from
 // hand to library while an opening-hand bottoming is in progress counts
-// against that requirement.
+// against that requirement. Tap state clears whenever a card enters or
+// leaves the battlefield.
 function moveCard(state, uid, toZone, { toBottom = false } = {}) {
-  const fromZone = findZoneOf(state, uid);
-  if (!fromZone || fromZone === toZone) return false;
+  const located = locateCard(state, uid);
+  if (!located || located.zone === toZone) return false;
+  const { zone: fromZone, card } = located;
 
   const idx = state[fromZone].findIndex(c => c.uid === uid);
-  const [card] = state[fromZone].splice(idx, 1);
+  state[fromZone].splice(idx, 1);
+  card.tapped = false;
 
   if (toZone === 'library') {
     if (toBottom) state.library.push(card);
@@ -97,6 +122,7 @@ function moveCard(state, uid, toZone, { toBottom = false } = {}) {
 function snapshot(state) {
   return {
     deckName: state.deckName,
+    hasCommander: state.hasCommander,
     life: state.life,
     turn: state.turn,
     library: [...state.library],
@@ -115,23 +141,25 @@ function escapeHtml(s) {
 
 function cardEl(c) {
   const img = c.data.image_small || c.data.image;
-  return `<div class="playtest__card" draggable="true" data-uid="${escapeHtml(c.uid)}" title="${escapeHtml(c.name)}">
+  return `<div class="playtest__card${c.tapped ? ' tapped' : ''}" draggable="true" data-uid="${escapeHtml(c.uid)}" title="${escapeHtml(c.name)}">
     <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(c.name)}">
   </div>`;
 }
 
 export function openPlaytest(deck, overlay) {
   let state = resetGame(deck);
-  const history = [];
+  const undoStack = [];
+  let pendingClick = null; // { id, uid } for the debounced single click awaiting a possible double-click
+  let draggedUid = null;
 
   function pushHistory() {
-    history.push(snapshot(state));
-    if (history.length > MAX_HISTORY) history.shift();
+    undoStack.push(snapshot(state));
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
   }
 
   function undo() {
-    if (!history.length) return;
-    state = history.pop();
+    if (!undoStack.length) return;
+    state = undoStack.pop();
   }
 
   function render() {
@@ -149,7 +177,7 @@ export function openPlaytest(deck, overlay) {
             <strong>${state.life}</strong>
             <button data-action="life-inc">+</button>
           </span>
-          <button class="btn" data-action="undo" ${history.length ? '' : 'disabled'}>↺ Undo</button>
+          <button class="btn" data-action="undo" ${undoStack.length ? '' : 'disabled'}>↺ Undo</button>
           <button class="btn" data-action="shuffle">Shuffle Library</button>
           <button class="btn" data-action="draw">Draw Card</button>
           <button class="btn" data-action="mulligan">Mulligan</button>
@@ -164,11 +192,15 @@ export function openPlaytest(deck, overlay) {
         </div>
       ` : ''}
 
+      <div class="playtest__hint">Click: draw / play / tap. Double-click: view card. Drag: move to any zone. Arrow keys: turn (←→) and life (↑↓). Browser Back: undo.</div>
+
       <div class="playtest__board">
-        ${state.command.length ? `
+        ${state.hasCommander ? `
           <div class="playtest__zone playtest__zone--command" data-dropzone="command">
             <h4>Command Zone</h4>
-            <div class="playtest__cards">${state.command.map(cardEl).join('')}</div>
+            <div class="playtest__cards">
+              ${state.command.length ? state.command.map(cardEl).join('') : `<span class="playtest__empty-hint">Empty — click or drag your commander here.</span>`}
+            </div>
           </div>
         ` : ''}
 
@@ -180,9 +212,14 @@ export function openPlaytest(deck, overlay) {
         </div>
 
         <div class="playtest__sidezones">
-          <div class="playtest__pile" data-action="draw" data-dropzone="library" title="Library — click to draw, drag a card here to bottom-deck it">
-            <strong>${state.library.length}</strong>
-            Library
+          <div class="playtest__librarygroup">
+            <div class="playtest__pile playtest__pile--libtop" data-action="draw" data-dropzone="library-top" title="Top of Library — click to draw, drag here to place on top">
+              <strong>${state.library.length}</strong>
+              Library
+            </div>
+            <div class="playtest__pile playtest__pile--libbottom" data-dropzone="library-bottom" title="Bottom of Library — drag here to bottom-deck">
+              ↓ Bottom
+            </div>
           </div>
           <div class="playtest__pile playtest__pile--gy" data-dropzone="graveyard" title="Graveyard — drag a card here">
             <strong>${state.graveyard.length}</strong>
@@ -204,6 +241,28 @@ export function openPlaytest(deck, overlay) {
     `;
   }
 
+  function handleCardClick(uid) {
+    const located = locateCard(state, uid);
+    if (!located) return;
+    const { zone: fromZone, card } = located;
+
+    if (fromZone === 'hand') {
+      pushHistory();
+      if (state.bottomingRemaining > 0) moveCard(state, uid, 'library', { toBottom: true });
+      else moveCard(state, uid, 'battlefield');
+      render();
+    } else if (fromZone === 'command') {
+      pushHistory();
+      moveCard(state, uid, 'battlefield');
+      render();
+    } else if (fromZone === 'battlefield') {
+      pushHistory();
+      card.tapped = !card.tapped;
+      render();
+    }
+    // Graveyard/exile cards have no click action — drag them out instead.
+  }
+
   overlay.onclick = (e) => {
     const actionEl = e.target.closest('[data-action]');
     const clickedCardEl = e.target.closest('[data-uid]');
@@ -211,11 +270,11 @@ export function openPlaytest(deck, overlay) {
     if (actionEl) {
       const action = actionEl.dataset.action;
       if (action === 'undo') { undo(); render(); return; }
-      if (action === 'exit') { overlay.classList.remove('open'); return; }
+      if (action === 'exit') { cleanup(); overlay.classList.remove('open'); return; }
 
       pushHistory();
       if (action === 'draw') drawN(state, 1);
-      else if (action === 'shuffle') state.library = shuffle(state.library);
+      else if (action === 'shuffle') state.library = stratifiedShuffle(state.library);
       else if (action === 'mulligan' || action === 'newgame') state = resetGame(deck);
       else if (action === 'life-inc') state.life++;
       else if (action === 'life-dec') state.life--;
@@ -227,24 +286,42 @@ export function openPlaytest(deck, overlay) {
 
     if (clickedCardEl) {
       const uid = clickedCardEl.dataset.uid;
-      const fromZone = findZoneOf(state, uid);
-      if (fromZone === 'hand' || fromZone === 'command' || fromZone === 'battlefield') {
-        pushHistory();
-        if (fromZone === 'hand') {
-          if (state.bottomingRemaining > 0) moveCard(state, uid, 'library', { toBottom: true });
-          else moveCard(state, uid, 'battlefield');
-        } else if (fromZone === 'command') {
-          moveCard(state, uid, 'battlefield');
-        } else {
-          const card = state.battlefield.find(c => c.uid === uid);
-          moveCard(state, uid, card.commander ? 'command' : 'graveyard');
-        }
-        render();
+      // A second click on the SAME card within the window means this is a
+      // double-click — let ondblclick handle it instead of also playing/
+      // tapping the card. Clicks on other cards schedule independently, so
+      // clicking through several different cards quickly (e.g. bottoming 3
+      // opening-hand cards) isn't mistaken for a double-click.
+      if (pendingClick && pendingClick.uid === uid) {
+        clearTimeout(pendingClick.id);
+        pendingClick = null;
+        return;
       }
+      const id = setTimeout(() => {
+        pendingClick = null;
+        handleCardClick(uid);
+      }, DBLCLICK_WINDOW);
+      pendingClick = { id, uid };
     }
   };
 
-  let draggedUid = null;
+  overlay.ondblclick = (e) => {
+    const clickedCardEl = e.target.closest('[data-uid]');
+    if (!clickedCardEl) return;
+    if (pendingClick && pendingClick.uid === clickedCardEl.dataset.uid) {
+      clearTimeout(pendingClick.id);
+      pendingClick = null;
+    }
+
+    const located = locateCard(state, clickedCardEl.dataset.uid);
+    if (!located) return;
+    const { card } = located;
+    openLightbox({
+      full: card.data.image || card.data.image_small,
+      uri: card.data.scryfall_uri,
+      name: card.name,
+      price: '',
+    });
+  };
 
   overlay.ondragstart = (e) => {
     const el = e.target.closest('[data-uid]');
@@ -273,15 +350,48 @@ export function openPlaytest(deck, overlay) {
     zone.classList.remove('drop-hover');
     if (!draggedUid) return;
 
-    const toZone = zone.dataset.dropzone;
-    const fromZone = findZoneOf(state, draggedUid);
-    if (fromZone && fromZone !== toZone) {
+    let toZone = zone.dataset.dropzone;
+    let toBottom = false;
+    if (toZone === 'library-top') { toZone = 'library'; toBottom = false; }
+    else if (toZone === 'library-bottom') { toZone = 'library'; toBottom = true; }
+
+    const located = locateCard(state, draggedUid);
+    if (located && located.zone !== toZone) {
       pushHistory();
-      moveCard(state, draggedUid, toZone, { toBottom: toZone === 'library' });
+      moveCard(state, draggedUid, toZone, { toBottom });
       render();
     }
     draggedUid = null;
   };
+
+  function onKeyDown(e) {
+    if (!overlay.classList.contains('open')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.key === 'ArrowLeft') { e.preventDefault(); pushHistory(); state.turn = Math.max(1, state.turn - 1); render(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); pushHistory(); state.turn++; render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); pushHistory(); state.life++; render(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); pushHistory(); state.life--; render(); }
+  }
+
+  // Pressing the browser Back button undoes the last action instead of
+  // navigating away, by keeping one extra history entry "primed" for us to
+  // intercept — we refill it after every undo so Back keeps working.
+  function onPopState() {
+    if (!overlay.classList.contains('open')) return;
+    undo();
+    render();
+    window.history.pushState({ playtestGuard: true }, '');
+  }
+
+  function cleanup() {
+    window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('popstate', onPopState);
+  }
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('popstate', onPopState);
+  window.history.pushState({ playtestGuard: true }, '');
 
   render();
   overlay.classList.add('open');
