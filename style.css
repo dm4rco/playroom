@@ -453,6 +453,23 @@ html, body {
 /* Battlefield slots reserve a square footprint big enough for a tapped
    (rotated) card, so tapping/untapping never reflows neighboring cards. */
 .playtest__zone--battlefield .playtest__card-slot { width: 182px; height: 182px; }
+
+/* Battlefield rows overlap cards (like a fanned stack) instead of wrapping,
+   so having a dozen Treasure tokens or several basic lands in play doesn't
+   blow the row out to an unusable width. Scrolls horizontally if it still
+   doesn't fit. Hovering a card brings it to the front so it's fully visible. */
+.playtest__zone--battlefield .playtest__cards {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 10px;
+}
+.playtest__zone--battlefield .playtest__card-slot {
+  margin-left: -95px;
+  position: relative;
+}
+.playtest__zone--battlefield .playtest__card-slot:first-child { margin-left: 0; }
+.playtest__zone--battlefield .playtest__card-slot:hover { z-index: 5; }
 .playtest__card {
   width: 130px;
   aspect-ratio: 5/7;

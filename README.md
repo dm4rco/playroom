@@ -73,7 +73,10 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     buttons (CMC / Type / Name) in the Hand header reorder it on demand.
   - The battlefield is split into Creatures / Other / Lands rows so permanents
     are easy to scan; drop a card anywhere in the battlefield area and it
-    lands in the right row automatically.
+    lands in the right row automatically. Cards within a row overlap in a
+    fan (rather than wrapping) and scroll horizontally, so a dozen Treasure
+    tokens or a handful of basics don't blow the row out — hover a card to
+    bring it fully to the front.
   - Double-click the Library, Graveyard, or Exile pile to browse every card
     in it — for tutor/recursion effects. Click a card in that view to play
     it to the battlefield (it stays open so you can grab more than one);

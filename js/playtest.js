@@ -423,24 +423,18 @@ export function openPlaytest(deck, overlay) {
 
     const tokenEl = e.target.closest('[data-token-name]');
     if (tokenEl) {
-      const key = `__token__:${tokenEl.dataset.tokenName}`;
-      // Same debounce as cards, keyed by name — a double-click should
-      // preview the token, not spawn two of it.
-      if (pendingClick && pendingClick.uid === key) {
-        clearTimeout(pendingClick.id);
-        pendingClick = null;
-        return;
+      // No debounce here: spawning tokens is meant to be clicked rapidly and
+      // repeatedly (e.g. 12 Treasures in a row), and since every click
+      // targets the same tile, debouncing by name would cancel every other
+      // click in a fast sequence. Double-clicking to preview a token just
+      // spawns two of it first — an acceptable trade-off since tokens are
+      // free to make and easy to discard.
+      const template = deckTokens.find(t => t.name === tokenEl.dataset.tokenName);
+      if (template) {
+        pushHistory();
+        state.battlefield.push(spawnToken(template));
+        render();
       }
-      const id = setTimeout(() => {
-        pendingClick = null;
-        const template = deckTokens.find(t => t.name === tokenEl.dataset.tokenName);
-        if (template) {
-          pushHistory();
-          state.battlefield.push(spawnToken(template));
-          render();
-        }
-      }, DBLCLICK_WINDOW);
-      pendingClick = { id, uid: key };
     }
   };
 
@@ -459,11 +453,6 @@ export function openPlaytest(deck, overlay) {
 
     const tokenEl = e.target.closest('[data-token-name]');
     if (tokenEl) {
-      const key = `__token__:${tokenEl.dataset.tokenName}`;
-      if (pendingClick && pendingClick.uid === key) {
-        clearTimeout(pendingClick.id);
-        pendingClick = null;
-      }
       const template = deckTokens.find(t => t.name === tokenEl.dataset.tokenName);
       if (template) openCardLightbox(template);
       return;
