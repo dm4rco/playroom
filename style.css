@@ -209,7 +209,10 @@ html, body {
 /* Charts */
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  /* Capped max track width so charts fill available space by adding more
+     columns rather than growing individual charts to enormous sizes on
+     wide/fullscreen viewports. */
+  grid-template-columns: repeat(auto-fit, minmax(340px, 480px));
   gap: 16px;
   margin-bottom: 32px;
 }
@@ -223,7 +226,12 @@ html, body {
   padding: 16px;
   min-width: 0;
 }
-.chart-card--wide { grid-column: 1 / -1; }
+.chart-card--wide {
+  grid-column: 1 / -1;
+  /* Spans the full row (which can be several tracks wide), but still caps
+     out at a readable size instead of stretching edge-to-edge. */
+  max-width: 900px;
+}
 .chart-card h3 { margin: 0 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .chart { width: 100%; height: auto; }
 .chart-label { fill: var(--text-dim); font-size: 13px; }
@@ -377,7 +385,7 @@ html, body {
   gap: 6px;
 }
 .playtest__zone h4 .count { font-weight: 400; }
-.playtest__zone--command { flex: 0 0 160px; }
+.playtest__leftcol { flex: 0 0 160px; display: flex; flex-direction: column; gap: 14px; }
 .playtest__zone--battlefield,
 .playtest__zone--hand,
 .playtest__zone--command {
@@ -427,6 +435,9 @@ html, body {
 }
 .playtest__pile--libbottom:hover { border-color: var(--border); color: var(--text-dim); }
 .playtest__pile--gy:hover, .playtest__pile--exile:hover { border-color: var(--border); color: var(--text-dim); }
+.playtest__pile--tokens { aspect-ratio: auto; height: 80px; border-color: var(--accent); }
+.playtest__pile--tokens strong { color: var(--accent-hover); }
+.playtest__pile--tokens:hover { background: rgba(124, 92, 255, 0.12); }
 
 .drop-hover { border-color: var(--accent) !important; background: rgba(124, 92, 255, 0.12); }
 

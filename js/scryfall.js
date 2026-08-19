@@ -1,12 +1,13 @@
 const CACHE_KEY = 'edh_scryfall_cache_v1';
+const TOKEN_CACHE_KEY = 'edh_token_cache_v1';
 
-function loadCache() {
-  try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; }
+function loadCache(key) {
+  try { return JSON.parse(localStorage.getItem(key)) || {}; }
   catch { return {}; }
 }
 
-function saveCache(cache) {
-  localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+function saveCache(key, cache) {
+  localStorage.setItem(key, JSON.stringify(cache));
 }
 
 function simplifyCard(card) {
@@ -26,13 +27,19 @@ function simplifyCard(card) {
     price_eur: card.prices?.eur ?? null,
     price_eur_foil: card.prices?.eur_foil ?? null,
     scryfall_uri: card.scryfall_uri || '',
+    // Tokens this card can create, per Scryfall's "related cards" data — used
+    // to populate the playtester's Tokens zone. Only id/name/type_line are
+    // available here; fetchTokenData() resolves the full card (image, etc).
+    tokenParts: (card.all_parts || [])
+      .filter(p => p.component === 'token')
+      .map(p => ({ id: p.id, name: p.name, type_line: p.type_line })),
   };
 }
 
 // Fetches (set, collector_number) pairs from Scryfall's collection endpoint
 // in batches of 75, using a localStorage cache so repeat imports are fast.
 export async function fetchCardData(cards, { force = false, onProgress } = {}) {
-  const cache = loadCache();
+  const cache = loadCache(CACHE_KEY);
   const need = [];
   const seen = new Set();
 
@@ -71,9 +78,50 @@ export async function fetchCardData(cards, { force = false, onProgress } = {}) {
     await new Promise(r => setTimeout(r, 100)); // stay polite to Scryfall's rate limit
   }
 
-  saveCache(cache);
+  saveCache(CACHE_KEY, cache);
 
   const result = {};
   for (const c of cards) result[c.key] = cache[c.key];
   return result;
+}
+
+// Resolves token references (from cards' tokenParts) into full card data
+// (image, type_line, etc.), for the playtester's Tokens zone. Different
+// printings link to different token ids even for identical tokens (e.g.
+// every "Treasure" token has its own uuid per source card), so this dedupes
+// by name first and only fetches one representative per unique name.
+export async function fetchTokenData(tokenRefs) {
+  const seenNames = new Set();
+  const uniqueRefs = [];
+  for (const t of tokenRefs) {
+    if (seenNames.has(t.name)) continue;
+    seenNames.add(t.name);
+    uniqueRefs.push(t);
+  }
+
+  const cache = loadCache(TOKEN_CACHE_KEY);
+  const need = uniqueRefs.filter(t => !cache[t.name]);
+
+  const batches = [];
+  for (let i = 0; i < need.length; i += 75) batches.push(need.slice(i, i + 75));
+
+  for (const batch of batches) {
+    const identifiers = batch.map(t => ({ id: t.id }));
+    const res = await fetch('https://api.scryfall.com/cards/collection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifiers }),
+    });
+    if (!res.ok) throw new Error(`Scryfall error ${res.status}`);
+    const data = await res.json();
+
+    for (const card of data.data) cache[card.name] = simplifyCard(card);
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  saveCache(TOKEN_CACHE_KEY, cache);
+
+  return uniqueRefs
+    .map(t => ({ name: t.name, data: cache[t.name] }))
+    .filter(t => t.data);
 }

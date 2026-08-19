@@ -54,6 +54,11 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
 - Archidekt import goes through a public CORS proxy (Archidekt's API doesn't
   allow browser requests from other sites). If that proxy is ever down, paste
   the decklist manually instead.
+- The commander is excluded from the Mana Curve, Color Pips, Category
+  Breakdown, and Card Types charts (it's always exactly one card, so it just
+  adds noise) but still counts toward Total Cards, Unique, and Est. Value.
+  Charts cap their own size instead of growing to fill the whole screen on
+  large monitors — they add more columns instead.
 - The "Playtest" button (top right, once a deck is loaded) opens a simple
   goldfishing sandbox with Library (split into Top/Bottom drop targets),
   Hand, Battlefield, Graveyard, and Exile zones, plus a Command Zone if your
@@ -72,6 +77,15 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     double-click one to preview it. Closing the Library browser (or
     switching to browse a different zone) always reshuffles it, since you
     just searched it.
+  - A Tokens pile sits below the Command Zone, listing every token your deck
+    can actually create (auto-detected from Scryfall's data on each card,
+    including its real type — creature, artifact, land, whatever). It's an
+    unlimited supply: double-click to browse it, then click a token to spawn
+    a fresh copy onto the battlefield — the token stays in the list so you
+    can make more. Spawned tokens go away for good once they leave the
+    battlefield (graveyard/exile/etc.), same as in paper Magic, since a
+    token isn't a real card. Decks imported before this feature need a
+    "Refresh Card Data" to pick up their token list.
   - Drag any card onto any zone to place it exactly where you want,
     including dragging onto the Library's Top or Bottom strip.
   - Arrow keys: ←/→ adjust turn, ↑/↓ adjust life. The browser's Back button

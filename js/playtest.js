@@ -4,7 +4,7 @@ const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'
 const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
 const DBLCLICK_WINDOW = 250;
-const BROWSABLE_ZONES = { library: 'Library', graveyard: 'Graveyard', exile: 'Exile' };
+const BROWSABLE_ZONES = { library: 'Library', graveyard: 'Graveyard', exile: 'Exile', tokens: 'Tokens' };
 const DRAW_PILE_KEY = '__draw-pile__';
 
 function shuffle(arr) {
@@ -42,10 +42,23 @@ function expand(cardList, { commander = false } = {}) {
   for (const c of cardList) {
     if (!c.data || c.data.notFound) continue;
     for (let i = 0; i < c.qty; i++) {
-      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander, tapped: false });
+      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander, tapped: false, isToken: false });
     }
   }
   return out;
+}
+
+// Tokens are an unlimited supply, not real cards — spawn a fresh instance
+// each time one is played rather than removing it from the catalog.
+function spawnToken(tokenTemplate) {
+  return {
+    uid: `t${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: tokenTemplate.name,
+    data: tokenTemplate.data,
+    commander: false,
+    tapped: false,
+    isToken: true,
+  };
 }
 
 function freshState(deck) {
@@ -87,7 +100,8 @@ function locateCard(state, uid) {
 
 // Moves a card between zones. Library placement defaults to the top (next
 // draw); pass toBottom to put it on the bottom instead. Tap state clears
-// whenever a card enters or leaves the battlefield.
+// whenever a card enters or leaves the battlefield. Tokens cease to exist
+// once they leave the battlefield, same as in paper Magic.
 function moveCard(state, uid, toZone, { toBottom = false } = {}) {
   const located = locateCard(state, uid);
   if (!located || located.zone === toZone) return false;
@@ -96,6 +110,8 @@ function moveCard(state, uid, toZone, { toBottom = false } = {}) {
   const idx = state[fromZone].findIndex(c => c.uid === uid);
   state[fromZone].splice(idx, 1);
   card.tapped = false;
+
+  if (fromZone === 'battlefield' && card.isToken) return true;
 
   if (toZone === 'library') {
     if (toBottom) state.library.push(card);
@@ -138,8 +154,20 @@ function cardRow(cards) {
   return cards.length ? cards.map(cardEl).join('') : '';
 }
 
+// Token catalog tiles (in the Tokens browser) aren't real card instances —
+// no uid, not draggable — clicking one spawns a fresh copy onto the battlefield.
+function tokenTileEl(t) {
+  const img = t.data.image_small || t.data.image;
+  return `<div class="playtest__card-slot">
+    <div class="playtest__card" data-token-name="${escapeHtml(t.name)}" title="${escapeHtml(t.name)}">
+      <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(t.name)}">
+    </div>
+  </div>`;
+}
+
 export function openPlaytest(deck, overlay) {
   let state = resetGame(deck);
+  const deckTokens = deck.tokens || [];
   const undoStack = [];
   let pendingClick = null; // { id, uid } for the debounced single click awaiting a possible double-click
   let draggedUid = null;
@@ -202,17 +230,23 @@ export function openPlaytest(deck, overlay) {
         </div>
       </div>
 
-      <div class="playtest__hint">Hand: click to view, drag to play. Battlefield: click to tap/untap. Command Zone / Library / Graveyard / Exile: click a card to play it. Double-click Library/Graveyard/Exile to browse. Arrow keys: turn (←→), life (↑↓). Browser Back: undo.</div>
+      <div class="playtest__hint">Hand: click to view, drag to play. Battlefield: click to tap/untap. Command Zone / Library / Graveyard / Exile / Tokens: click a card to play it. Double-click Library/Graveyard/Exile/Tokens to browse. Arrow keys: turn (←→), life (↑↓). Browser Back: undo.</div>
 
       <div class="playtest__board">
-        ${state.hasCommander ? `
-          <div class="playtest__zone playtest__zone--command" data-dropzone="command">
-            <h4>Command Zone</h4>
-            <div class="playtest__cards">
-              ${state.command.length ? cardRow(state.command) : `<span class="playtest__empty-hint">Empty — click or drag your commander here.</span>`}
+        <div class="playtest__leftcol">
+          ${state.hasCommander ? `
+            <div class="playtest__zone playtest__zone--command" data-dropzone="command">
+              <h4>Command Zone</h4>
+              <div class="playtest__cards">
+                ${state.command.length ? cardRow(state.command) : `<span class="playtest__empty-hint">Empty — click or drag your commander here.</span>`}
+              </div>
             </div>
+          ` : ''}
+          <div class="playtest__pile playtest__pile--tokens" data-browse="tokens" title="Tokens — double-click to browse, click one there to create it on the battlefield">
+            <strong>∞</strong>
+            Tokens
           </div>
-        ` : ''}
+        </div>
 
         <div class="playtest__zone playtest__zone--battlefield" data-dropzone="battlefield">
           <h4>Battlefield <span class="count">${state.battlefield.length}</span></h4>
@@ -263,11 +297,13 @@ export function openPlaytest(deck, overlay) {
         <div class="zone-browser">
           <div class="zone-browser__panel">
             <div class="zone-browser__header">
-              <h3>${escapeHtml(BROWSABLE_ZONES[browsingZone])} <span class="count">${state[browsingZone].length}</span></h3>
+              <h3>${escapeHtml(BROWSABLE_ZONES[browsingZone])} <span class="count">${browsingZone === 'tokens' ? deckTokens.length : state[browsingZone].length}</span></h3>
               <button class="btn btn--primary" data-action="close-browser">${browsingZone === 'library' ? 'Close & Shuffle' : 'Close'}</button>
             </div>
             <div class="playtest__cards">
-              ${state[browsingZone].length ? cardRow(state[browsingZone]) : `<span class="playtest__empty-hint">Nothing here.</span>`}
+              ${browsingZone === 'tokens'
+                ? (deckTokens.length ? deckTokens.map(tokenTileEl).join('') : `<span class="playtest__empty-hint">No tokens found for this deck. (Older imports need "Refresh Card Data" to pick up token detection.)</span>`)
+                : (state[browsingZone].length ? cardRow(state[browsingZone]) : `<span class="playtest__empty-hint">Nothing here.</span>`)}
             </div>
           </div>
         </div>
@@ -361,6 +397,29 @@ export function openPlaytest(deck, overlay) {
         handleCardClick(uid);
       }, DBLCLICK_WINDOW);
       pendingClick = { id, uid };
+      return;
+    }
+
+    const tokenEl = e.target.closest('[data-token-name]');
+    if (tokenEl) {
+      const key = `__token__:${tokenEl.dataset.tokenName}`;
+      // Same debounce as cards, keyed by name — a double-click should
+      // preview the token, not spawn two of it.
+      if (pendingClick && pendingClick.uid === key) {
+        clearTimeout(pendingClick.id);
+        pendingClick = null;
+        return;
+      }
+      const id = setTimeout(() => {
+        pendingClick = null;
+        const template = deckTokens.find(t => t.name === tokenEl.dataset.tokenName);
+        if (template) {
+          pushHistory();
+          state.battlefield.push(spawnToken(template));
+          render();
+        }
+      }, DBLCLICK_WINDOW);
+      pendingClick = { id, uid: key };
     }
   };
 
@@ -374,6 +433,18 @@ export function openPlaytest(deck, overlay) {
       const located = locateCard(state, clickedCardEl.dataset.uid);
       if (!located) return;
       openCardLightbox(located.card);
+      return;
+    }
+
+    const tokenEl = e.target.closest('[data-token-name]');
+    if (tokenEl) {
+      const key = `__token__:${tokenEl.dataset.tokenName}`;
+      if (pendingClick && pendingClick.uid === key) {
+        clearTimeout(pendingClick.id);
+        pendingClick = null;
+      }
+      const template = deckTokens.find(t => t.name === tokenEl.dataset.tokenName);
+      if (template) openCardLightbox(template);
       return;
     }
 

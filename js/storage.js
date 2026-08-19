@@ -9,9 +9,9 @@ function saveDecks(decks) {
   localStorage.setItem(DECKS_KEY, JSON.stringify(decks));
 }
 
-export function upsertDeck(name, rawText, cards) {
+export function upsertDeck(name, rawText, cards, tokens = []) {
   const decks = loadDecks();
-  decks[name] = { name, rawText, cards, updatedAt: Date.now() };
+  decks[name] = { name, rawText, cards, tokens, updatedAt: Date.now() };
   saveDecks(decks);
   return decks;
 }

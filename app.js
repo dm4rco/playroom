@@ -1,5 +1,5 @@
 import { parseDecklist } from './js/parser.js';
-import { fetchCardData } from './js/scryfall.js';
+import { fetchCardData, fetchTokenData } from './js/scryfall.js';
 import { loadDecks, upsertDeck, deleteDeck, renameDeck } from './js/storage.js';
 import { renderDeck } from './js/render.js';
 import { fetchArchidektDeck } from './js/archidekt.js';
@@ -126,8 +126,12 @@ async function doImport(forceRefresh = false) {
 
     for (const c of cards) c.data = cardData[c.key] || null;
 
+    els.importStatus.textContent = 'Checking for tokens...';
+    const tokenRefs = cards.flatMap(c => c.data?.tokenParts || []);
+    const tokens = tokenRefs.length ? await fetchTokenData(tokenRefs) : [];
+
     const wasEditing = editingOriginalName !== null;
-    upsertDeck(name, text, cards);
+    upsertDeck(name, text, cards, tokens);
     if (editingOriginalName && editingOriginalName !== name) {
       deleteDeck(editingOriginalName);
     }

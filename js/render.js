@@ -3,7 +3,6 @@ import { barChart, donutChart, COLORS, paletteColor } from './charts.js';
 const TYPE_ORDER = ['Land', 'Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment'];
 const COLOR_LABELS = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
 const PIP_COLORS = ['W', 'U', 'B', 'R', 'G'];
-const CATEGORY_ORDER_HINT = ['Commander']; // pinned first; rest sorted by count
 const CURVE_ORDER = ['0', '1', '2', '3', '4', '5', '6', '7+'];
 
 function primaryType(typeLine = '') {
@@ -46,20 +45,26 @@ function money(n) {
 }
 
 export function computeStats(cards) {
-  const withData = cards.filter(c => c.data && !c.data.notFound);
   const totalCards = cards.reduce((s, c) => s + c.qty, 0);
   const uniqueCards = cards.length;
+
+  const allWithData = cards.filter(c => c.data && !c.data.notFound);
+  const totalPrice = allWithData.reduce((s, c) => {
+    const p = cardPriceEur(c);
+    return s + (p || 0) * c.qty;
+  }, 0);
+
+  // The charts below exclude the commander — it's always exactly one card,
+  // so counting it just adds noise (a "Commander" category bar that's
+  // always 1, an extra type/pip/curve entry) without telling you anything.
+  const nonCommanderCards = cards.filter(c => !c.isCommander);
+  const withData = nonCommanderCards.filter(c => c.data && !c.data.notFound);
 
   const nonland = withData.filter(c => primaryType(c.data.type_line) !== 'Land');
   const nonlandQty = nonland.reduce((s, c) => s + c.qty, 0);
   const avgCmc = nonlandQty
     ? nonland.reduce((s, c) => s + c.data.cmc * c.qty, 0) / nonlandQty
     : 0;
-
-  const totalPrice = withData.reduce((s, c) => {
-    const p = cardPriceEur(c);
-    return s + (p || 0) * c.qty;
-  }, 0);
 
   const curveMap = new Map();
   for (const c of nonland) {
@@ -80,14 +85,9 @@ export function computeStats(cards) {
     .filter(d => d.value > 0);
 
   const catMap = new Map();
-  for (const c of cards) catMap.set(c.category, (catMap.get(c.category) || 0) + c.qty);
+  for (const c of nonCommanderCards) catMap.set(c.category, (catMap.get(c.category) || 0) + c.qty);
   const categoryBreakdown = [...catMap.entries()]
-    .sort((a, b) => {
-      const ai = CATEGORY_ORDER_HINT.indexOf(a[0]);
-      const bi = CATEGORY_ORDER_HINT.indexOf(b[0]);
-      if (ai !== -1 || bi !== -1) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-      return b[1] - a[1];
-    })
+    .sort((a, b) => b[1] - a[1])
     .map(([label, value]) => ({ label, value }));
 
   // Per-category mana curve, shown inline within each category's gallery section.
