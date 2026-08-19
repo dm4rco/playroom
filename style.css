@@ -426,7 +426,6 @@ html, body {
 }
 .playtest__pile strong { font-size: 26px; color: var(--text); }
 .playtest__pile:hover { border-color: var(--accent); color: var(--text); }
-.playtest__pile--gy, .playtest__pile--exile { cursor: default; }
 .playtest__pile--libbottom {
   aspect-ratio: auto;
   height: 32px;
@@ -434,7 +433,6 @@ html, body {
   cursor: default;
 }
 .playtest__pile--libbottom:hover { border-color: var(--border); color: var(--text-dim); }
-.playtest__pile--gy:hover, .playtest__pile--exile:hover { border-color: var(--border); color: var(--text-dim); }
 .playtest__pile--tokens { aspect-ratio: auto; height: 80px; border-color: var(--accent); }
 .playtest__pile--tokens strong { color: var(--accent-hover); }
 .playtest__pile--tokens:hover { background: rgba(124, 92, 255, 0.12); }
@@ -469,6 +467,9 @@ html, body {
   position: relative;
 }
 .playtest__zone--battlefield .playtest__card-slot:first-child { margin-left: 0; }
+/* A copy of the same card right before it — no need to see it clearly,
+   just that it's there, so overlap much tighter than usual. */
+.playtest__zone--battlefield .playtest__card-slot--tight { margin-left: -160px; }
 .playtest__zone--battlefield .playtest__card-slot:hover { z-index: 5; }
 .playtest__card {
   width: 130px;

@@ -61,9 +61,11 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   large monitors — they add more columns instead.
 - The "Playtest" button (top right, once a deck is loaded) opens a simple
   goldfishing sandbox with Library (split into Top/Bottom drop targets),
-  Hand, Battlefield, Graveyard, and Exile zones, plus a Command Zone if your
-  deck has a commander — it stays on screen (as an empty drop target) even
-  after the commander is cast, so you can drag or click it back.
+  Hand, Battlefield, Graveyard, Exile, and Tokens zones, plus a Command Zone
+  if your deck has a commander — it stays on screen (as an empty drop
+  target) even after the commander is cast, so you can drag or click it
+  back. Rendered with Preact+htm loaded from a CDN as ES modules (no build
+  step, no npm — still just static files pushed to GitHub Pages).
   - Click a hand card to view it full-size — moving it is drag-only. Click a
     battlefield card to tap/untap it (rotates 90°, and battlefield slots
     always reserve room for the rotation so nothing jumps around). Click your
@@ -75,27 +77,31 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     are easy to scan; drop a card anywhere in the battlefield area and it
     lands in the right row automatically. Cards within a row overlap in a
     fan (rather than wrapping) and scroll horizontally, so a dozen Treasure
-    tokens or a handful of basics don't blow the row out — hover a card to
-    bring it fully to the front.
-  - Double-click the Library, Graveyard, or Exile pile to browse every card
-    in it — for tutor/recursion effects. Click a card in that view to play
-    it to the battlefield (it stays open so you can grab more than one);
-    double-click one to preview it. Closing the Library browser (or
-    switching to browse a different zone) always reshuffles it, since you
-    just searched it.
-  - A Tokens pile sits below the Command Zone, listing every token your deck
-    can actually create (auto-detected from Scryfall's data on each card,
+    tokens or a handful of basics don't blow the row out — consecutive
+    copies of the *same* card overlap much tighter than usual (you don't
+    need to see all 10 Mountains clearly, just that they're there). Hover a
+    card to bring it fully to the front.
+  - Click the Library pile to draw, or double-click it (or the Bottom strip)
+    to browse every card in it — for tutors. Click the Graveyard, Exile, or
+    Tokens pile once to browse it — for recursion or making tokens. Click a
+    card in that view to play it to the battlefield (it stays open so you
+    can grab more than one); double-click one to preview it. Closing the
+    Library browser (or switching to browse a different zone) always
+    reshuffles it, since you just searched it.
+  - The Tokens pile (below the Command Zone) lists every token your deck can
+    actually create (auto-detected from Scryfall's data on each card,
     including its real type — creature, artifact, land, whatever). It's an
-    unlimited supply: double-click to browse it, then click a token to spawn
-    a fresh copy onto the battlefield — the token stays in the list so you
-    can make more. Spawned tokens go away for good once they leave the
-    battlefield (graveyard/exile/etc.), same as in paper Magic, since a
-    token isn't a real card. Decks imported before this feature need a
-    "Refresh Card Data" to pick up their token list.
+    unlimited supply: click a token to spawn a fresh copy onto the
+    battlefield — the token stays in the list so you can make more. Spawned
+    tokens go away for good once they leave the battlefield (graveyard/
+    exile/etc.), same as in paper Magic, since a token isn't a real card.
+    Decks imported before this feature need a "Refresh Card Data" to pick up
+    their token list.
   - Drag any card onto any zone to place it exactly where you want,
     including dragging onto the Library's Top or Bottom strip.
-  - Arrow keys: ←/→ adjust turn, ↑/↓ adjust life. The browser's Back button
-    undoes the last action, same as the on-screen Undo button.
+  - Space bar draws a card. Arrow keys: ←/→ adjust turn, ↑/↓ adjust life.
+    The browser's Back button undoes the last action, same as the
+    on-screen Undo button.
 - Opening hand is just a draw of 10, full stop — there's no forced mulligan
   step. It's single-player testing, so do whatever you want with them (play
   them, bottom some via drag, whatever). Both "New Game" and "Mulligan"
