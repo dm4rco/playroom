@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <button id="playtest-btn" class="btn btn--primary playtest-btn hidden">▶ Playtest</button>
+
   <div class="app">
     <aside class="sidebar">
       <div class="sidebar__header">
@@ -20,7 +22,14 @@
     <main class="content">
       <div id="import-panel" class="import-panel hidden">
         <h2 id="import-title">Import Decklist</h2>
-        <p class="hint">Paste your decklist below, in the format:<br>
+
+        <div class="import-panel__source">
+          <input id="archidekt-url" type="text" placeholder="https://archidekt.com/decks/25521882/vihaan_goldwaker">
+          <button id="archidekt-fetch-btn" class="btn">Fetch from Archidekt</button>
+        </div>
+        <div class="import-panel__or">or paste a decklist below</div>
+
+        <p class="hint">Format:<br>
           <code>1x Card Name (set) 123 *F* [Category]</code></p>
         <input id="import-name" type="text" placeholder="Deck name (auto-detected from commander if left blank)">
         <textarea id="import-text" rows="16" placeholder="1x Aang's Defense (tle) 211 *F* [Draw]&#10;1x Blood Crypt (trk) 278 [Land]&#10;..."></textarea>
@@ -46,6 +55,8 @@
       <div id="main" class="deck-main hidden"></div>
     </main>
   </div>
+
+  <div id="playtest-overlay" class="playtest-overlay"></div>
 
   <script type="module" src="app.js"></script>
 </body>

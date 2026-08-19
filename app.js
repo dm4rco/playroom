@@ -2,6 +2,8 @@ import { parseDecklist } from './js/parser.js';
 import { fetchCardData } from './js/scryfall.js';
 import { loadDecks, upsertDeck, deleteDeck, renameDeck } from './js/storage.js';
 import { renderDeck } from './js/render.js';
+import { fetchArchidektDeck } from './js/archidekt.js';
+import { openPlaytest } from './js/playtest.js';
 
 const els = {
   deckList: document.getElementById('deck-list'),
@@ -13,6 +15,8 @@ const els = {
   importSubmit: document.getElementById('import-submit'),
   importCancel: document.getElementById('import-cancel'),
   importStatus: document.getElementById('import-status'),
+  archidektUrl: document.getElementById('archidekt-url'),
+  archidektFetchBtn: document.getElementById('archidekt-fetch-btn'),
   main: document.getElementById('main'),
   emptyState: document.getElementById('empty-state'),
   editBtn: document.getElementById('edit-btn'),
@@ -20,6 +24,8 @@ const els = {
   renameBtn: document.getElementById('rename-btn'),
   deleteBtn: document.getElementById('delete-btn'),
   deckActions: document.getElementById('deck-actions'),
+  playtestBtn: document.getElementById('playtest-btn'),
+  playtestOverlay: document.getElementById('playtest-overlay'),
 };
 
 let currentDeckName = null;
@@ -64,6 +70,7 @@ function selectDeck(name) {
   els.emptyState.classList.add('hidden');
   els.main.classList.remove('hidden');
   els.deckActions.classList.remove('hidden');
+  els.playtestBtn.classList.remove('hidden');
   renderDeck(deck, els.main);
   renderSidebar();
 }
@@ -176,9 +183,38 @@ els.deleteBtn.addEventListener('click', () => {
   deleteDeck(currentDeckName);
   currentDeckName = null;
   els.deckActions.classList.add('hidden');
+  els.playtestBtn.classList.add('hidden');
   els.main.classList.add('hidden');
   els.emptyState.classList.remove('hidden');
   renderSidebar();
+});
+
+els.archidektFetchBtn.addEventListener('click', async () => {
+  const input = els.archidektUrl.value.trim();
+  if (!input) {
+    els.importStatus.textContent = 'Paste an Archidekt deck URL first.';
+    return;
+  }
+  els.archidektFetchBtn.disabled = true;
+  els.importStatus.textContent = 'Fetching deck from Archidekt...';
+  try {
+    const { name, text } = await fetchArchidektDeck(input);
+    els.importName.value = name;
+    els.importText.value = text;
+    els.importStatus.textContent = `Loaded "${name}" from Archidekt — review below, then click Import.`;
+  } catch (err) {
+    els.importStatus.textContent = `Error: ${err.message}`;
+  } finally {
+    els.archidektFetchBtn.disabled = false;
+  }
+});
+
+els.playtestBtn.addEventListener('click', () => {
+  if (!currentDeckName) return;
+  const decks = loadDecks();
+  const deck = decks[currentDeckName];
+  if (!deck) return;
+  openPlaytest(deck, els.playtestOverlay);
 });
 
 // init
