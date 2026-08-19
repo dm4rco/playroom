@@ -36,36 +36,6 @@ export function barChart(data, { width = 480, height = 220, color = '#7c5cff', c
   return `<svg viewBox="0 0 ${width} ${height}" class="chart" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
 }
 
-export function stackedBarChart(buckets, categories, { width = 600, height = 260, colorFn } = {}) {
-  const padding = 34;
-  const totals = buckets.map(b => categories.reduce((s, cat) => s + (b.values[cat] || 0), 0));
-  const max = Math.max(1, ...totals);
-  const n = Math.max(1, buckets.length);
-  const barW = (width - padding * 2) / n;
-
-  const bars = buckets.map((b, i) => {
-    const x = padding + i * barW;
-    let yCursor = height - padding;
-    const segs = categories.map((cat, ci) => {
-      const v = b.values[cat] || 0;
-      if (!v) return '';
-      const h = (v / max) * (height - padding * 2);
-      const y = yCursor - h;
-      yCursor = y;
-      const fill = colorFn(cat, ci);
-      return `<rect x="${x + barW * 0.15}" y="${y}" width="${barW * 0.7}" height="${h}" fill="${fill}"><title>${escapeXml(cat)}: ${v}</title></rect>`;
-    }).join('');
-    return `
-      <g>
-        ${segs}
-        <text x="${x + barW / 2}" y="${height - padding + 18}" text-anchor="middle" class="chart-label">${escapeXml(b.label)}</text>
-        ${totals[i] ? `<text x="${x + barW / 2}" y="${yCursor - 6}" text-anchor="middle" class="chart-value">${totals[i]}</text>` : ''}
-      </g>`;
-  }).join('');
-
-  return `<svg viewBox="0 0 ${width} ${height}" class="chart" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
-}
-
 export function donutChart(data, { size = 200, innerRatio = 0.55 } = {}) {
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const r = size / 2 - 4;

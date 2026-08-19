@@ -7,6 +7,7 @@ const els = {
   deckList: document.getElementById('deck-list'),
   newDeckBtn: document.getElementById('new-deck-btn'),
   importPanel: document.getElementById('import-panel'),
+  importTitle: document.getElementById('import-title'),
   importName: document.getElementById('import-name'),
   importText: document.getElementById('import-text'),
   importSubmit: document.getElementById('import-submit'),
@@ -14,6 +15,7 @@ const els = {
   importStatus: document.getElementById('import-status'),
   main: document.getElementById('main'),
   emptyState: document.getElementById('empty-state'),
+  editBtn: document.getElementById('edit-btn'),
   refreshBtn: document.getElementById('refresh-btn'),
   renameBtn: document.getElementById('rename-btn'),
   deleteBtn: document.getElementById('delete-btn'),
@@ -21,6 +23,9 @@ const els = {
 };
 
 let currentDeckName = null;
+// Set while the import panel is open for an existing deck, so we can tell
+// doImport whether to overwrite that deck (and clean up a rename) vs create a new one.
+let editingOriginalName = null;
 
 function guessDeckName(cards) {
   const cmd = cards.find(c => c.isCommander);
@@ -63,7 +68,9 @@ function selectDeck(name) {
   renderSidebar();
 }
 
-function showImportPanel(prefillName = '', prefillText = '') {
+function showImportPanel(prefillName = '', prefillText = '', isEdit = false) {
+  editingOriginalName = isEdit ? currentDeckName : null;
+  els.importTitle.textContent = isEdit ? 'Edit Decklist' : 'Import Decklist';
   els.importPanel.classList.remove('hidden');
   els.emptyState.classList.add('hidden');
   els.main.classList.add('hidden');
@@ -73,6 +80,7 @@ function showImportPanel(prefillName = '', prefillText = '') {
 }
 
 function hideImportPanel() {
+  editingOriginalName = null;
   els.importPanel.classList.add('hidden');
   if (currentDeckName) {
     els.main.classList.remove('hidden');
@@ -109,10 +117,15 @@ async function doImport(forceRefresh = false) {
 
     for (const c of cards) c.data = cardData[c.key] || null;
 
+    const wasEditing = editingOriginalName !== null;
     upsertDeck(name, text, cards);
+    if (editingOriginalName && editingOriginalName !== name) {
+      deleteDeck(editingOriginalName);
+    }
+    editingOriginalName = null;
     currentDeckName = name;
 
-    let msg = `Imported "${name}" — ${cards.length} unique cards.`;
+    let msg = `${wasEditing ? 'Saved' : 'Imported'} "${name}" — ${cards.length} unique cards.`;
     if (errors.length) msg += ` ${errors.length} line(s) could not be parsed.`;
     els.importStatus.textContent = msg;
 
@@ -131,14 +144,20 @@ els.newDeckBtn.addEventListener('click', () => showImportPanel());
 els.importCancel.addEventListener('click', hideImportPanel);
 els.importSubmit.addEventListener('click', () => doImport(false));
 
+els.editBtn.addEventListener('click', () => {
+  if (!currentDeckName) return;
+  const decks = loadDecks();
+  const deck = decks[currentDeckName];
+  if (!deck) return;
+  showImportPanel(deck.name, deck.rawText, true);
+});
+
 els.refreshBtn.addEventListener('click', async () => {
   if (!currentDeckName) return;
   const decks = loadDecks();
   const deck = decks[currentDeckName];
   if (!deck) return;
-  els.importName.value = deck.name;
-  els.importText.value = deck.rawText;
-  showImportPanel(deck.name, deck.rawText);
+  showImportPanel(deck.name, deck.rawText, true);
   await doImport(true);
 });
 

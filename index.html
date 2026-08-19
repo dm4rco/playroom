@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EDH Deck Viewer</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +19,7 @@
 
     <main class="content">
       <div id="import-panel" class="import-panel hidden">
-        <h2>Import Decklist</h2>
+        <h2 id="import-title">Import Decklist</h2>
         <p class="hint">Paste your decklist below, in the format:<br>
           <code>1x Card Name (set) 123 *F* [Category]</code></p>
         <input id="import-name" type="text" placeholder="Deck name (auto-detected from commander if left blank)">
@@ -36,6 +37,7 @@
       </div>
 
       <div id="deck-actions" class="deck-actions hidden">
+        <button id="edit-btn" class="btn">Edit List</button>
         <button id="refresh-btn" class="btn">Refresh Card Data</button>
         <button id="rename-btn" class="btn">Rename</button>
         <button id="delete-btn" class="btn btn--danger">Delete</button>

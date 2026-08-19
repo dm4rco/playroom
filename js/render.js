@@ -1,4 +1,4 @@
-import { barChart, donutChart, stackedBarChart, COLORS, paletteColor } from './charts.js';
+import { barChart, donutChart, COLORS, paletteColor } from './charts.js';
 
 const TYPE_ORDER = ['Land', 'Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment'];
 const COLOR_LABELS = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
@@ -90,16 +90,21 @@ export function computeStats(cards) {
     })
     .map(([label, value]) => ({ label, value }));
 
-  // Same category order/coloring as the breakdown chart, so the two stay visually linked.
-  const curveCatMap = new Map();
+  // Per-category mana curve, shown inline within each category's gallery section.
+  // Skipped for categories with fewer than 2 nonland cards, where a curve isn't meaningful.
+  const categoryCurveCounts = new Map();
   for (const c of nonland) {
     const b = cmcBucket(c.data.cmc);
-    if (!curveCatMap.has(b)) curveCatMap.set(b, {});
-    const bucket = curveCatMap.get(b);
-    bucket[c.category] = (bucket[c.category] || 0) + c.qty;
+    if (!categoryCurveCounts.has(c.category)) categoryCurveCounts.set(c.category, new Map());
+    const m = categoryCurveCounts.get(c.category);
+    m.set(b, (m.get(b) || 0) + c.qty);
   }
-  const curveCategories = categoryBreakdown.map(d => d.label).filter(cat => cat !== 'Land');
-  const manaCurveByCategory = CURVE_ORDER.map(b => ({ label: b, values: curveCatMap.get(b) || {} }));
+  const categoryCurves = new Map();
+  for (const [cat, bucketMap] of categoryCurveCounts) {
+    const total = [...bucketMap.values()].reduce((s, v) => s + v, 0);
+    if (total < 2) continue;
+    categoryCurves.set(cat, CURVE_ORDER.map(b => ({ label: b, value: bucketMap.get(b) || 0 })));
+  }
 
   const typeMap = new Map();
   for (const c of withData) {
@@ -115,7 +120,7 @@ export function computeStats(cards) {
 
   return {
     totalCards, uniqueCards, avgCmc, totalPrice,
-    manaCurve, manaCurveByCategory, curveCategories,
+    manaCurve, categoryCurves,
     colorPips, categoryBreakdown, typeBreakdown,
     commander, notFound,
   };
@@ -192,22 +197,21 @@ export function renderDeck(deck, root) {
         <h3>Card Types</h3>
         ${barChart(stats.typeBreakdown, { colorFn: (_, i) => paletteColor(i + 3) })}
       </div>
-      <div class="chart-card chart-card--wide">
-        <h3>Mana Curve by Category</h3>
-        ${stackedBarChart(stats.manaCurveByCategory, stats.curveCategories, { colorFn: (cat) => categoryColor.get(cat) })}
-        <div class="chart-card__legend">
-          ${stats.curveCategories.map(cat => `<span><span class="swatch" style="background:${categoryColor.get(cat)}"></span>${escapeHtml(cat)}</span>`).join('')}
-        </div>
-      </div>
     </div>
 
     <div class="gallery">
       ${stats.categoryBreakdown.map(({ label: cat }) => {
         const cardsInCat = deck.cards.filter(c => c.category === cat)
           .sort((a, b) => a.name.localeCompare(b.name));
+        const curve = stats.categoryCurves.get(cat);
         return `
           <section class="category-section">
             <h3>${escapeHtml(cat)} <span class="count">${cardsInCat.reduce((s, c) => s + c.qty, 0)}</span></h3>
+            ${curve ? `
+              <div class="category-curve">
+                ${barChart(curve, { width: 420, height: 110, color: categoryColor.get(cat) })}
+              </div>
+            ` : ''}
             <div class="card-grid">
               ${cardsInCat.map(cardTile).join('')}
             </div>
