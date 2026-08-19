@@ -26,6 +26,8 @@ const els = {
   deckActions: document.getElementById('deck-actions'),
   playtestBtn: document.getElementById('playtest-btn'),
   playtestOverlay: document.getElementById('playtest-overlay'),
+  sidebar: document.getElementById('sidebar'),
+  sidebarToggle: document.getElementById('sidebar-toggle'),
 };
 
 let currentDeckName = null;
@@ -217,7 +219,23 @@ els.playtestBtn.addEventListener('click', () => {
   openPlaytest(deck, els.playtestOverlay);
 });
 
+const SIDEBAR_COLLAPSED_KEY = 'edh_sidebar_collapsed';
+
+function applySidebarState() {
+  const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  els.sidebar.classList.toggle('collapsed', collapsed);
+  els.sidebarToggle.textContent = collapsed ? '›' : '‹';
+  els.sidebarToggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+}
+
+els.sidebarToggle.addEventListener('click', () => {
+  const collapsed = els.sidebar.classList.contains('collapsed');
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '0' : '1');
+  applySidebarState();
+});
+
 // init
+applySidebarState();
 renderSidebar();
 const decks = loadDecks();
 const firstDeck = Object.keys(decks).sort((a, b) => decks[b].updatedAt - decks[a].updatedAt)[0];

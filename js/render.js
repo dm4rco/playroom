@@ -189,11 +189,11 @@ export function renderDeck(deck, root) {
           </ul>
         </div>
       </div>
-      <div class="chart-card">
+      <div class="chart-card${stats.categoryBreakdown.length > 5 ? ' chart-card--wide' : ''}">
         <h3>Category Breakdown</h3>
         ${barChart(stats.categoryBreakdown, { colorFn: (d) => categoryColor.get(d.label) })}
       </div>
-      <div class="chart-card">
+      <div class="chart-card${stats.typeBreakdown.length > 5 ? ' chart-card--wide' : ''}">
         <h3>Card Types</h3>
         ${barChart(stats.typeBreakdown, { colorFn: (_, i) => paletteColor(i + 3) })}
       </div>

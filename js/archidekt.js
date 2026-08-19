@@ -3,6 +3,10 @@
 // is ever down, the user can still paste a decklist manually.
 const CORS_PROXY = 'https://corsproxy.io/?url=';
 
+// These are never real deck contents, so they're excluded unconditionally —
+// even if a deck's own category settings mark them as included.
+const ALWAYS_EXCLUDED_CATEGORIES = new Set(['Maybeboard', 'Tokens & Extras']);
+
 export function parseArchidektId(input) {
   const s = String(input).trim();
   const m = s.match(/archidekt\.com\/decks\/(\d+)/i) || s.match(/^(\d+)$/);
@@ -28,9 +32,10 @@ export async function fetchArchidektDeck(idOrUrl) {
   const data = await res.json();
   if (!Array.isArray(data.cards)) throw new Error('Unexpected response from Archidekt.');
 
-  const excludedCats = new Set(
-    (data.categories || []).filter(c => c.includedInDeck === false).map(c => c.name)
-  );
+  const excludedCats = new Set([
+    ...ALWAYS_EXCLUDED_CATEGORIES,
+    ...(data.categories || []).filter(c => c.includedInDeck === false).map(c => c.name),
+  ]);
 
   const lines = [];
   for (const entry of data.cards) {

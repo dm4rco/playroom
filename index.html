@@ -11,10 +11,13 @@
   <button id="playtest-btn" class="btn btn--primary playtest-btn hidden">▶ Playtest</button>
 
   <div class="app">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
+      <button id="sidebar-toggle" class="sidebar__toggle" title="Collapse sidebar">‹</button>
       <div class="sidebar__header">
         <h1>EDH Decks</h1>
-        <button id="new-deck-btn" class="btn btn--primary">+ New Deck</button>
+        <button id="new-deck-btn" class="btn btn--primary">
+          <span class="btn-icon">+</span><span class="btn-label"> New Deck</span>
+        </button>
       </div>
       <ul id="deck-list" class="deck-list"></ul>
     </aside>
