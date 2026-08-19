@@ -23,6 +23,19 @@ function primaryTypeOf(card) {
   return 'other';
 }
 
+const HAND_SORT_TYPE_ORDER = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'];
+function handSortTypeRank(card) {
+  const t = card.data?.type_line || '';
+  const idx = HAND_SORT_TYPE_ORDER.findIndex(x => t.includes(x));
+  return idx === -1 ? HAND_SORT_TYPE_ORDER.length : idx;
+}
+
+function sortHand(hand, mode) {
+  if (mode === 'cmc') hand.sort((a, b) => (a.data.cmc - b.data.cmc) || a.name.localeCompare(b.name));
+  else if (mode === 'type') hand.sort((a, b) => (handSortTypeRank(a) - handSortTypeRank(b)) || a.name.localeCompare(b.name));
+  else if (mode === 'name') hand.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // Splits the battlefield into Creatures / Other / Lands for display, so
 // permanents are easy to scan at a glance instead of one undifferentiated pile.
 function battlefieldGroups(battlefield) {
@@ -287,8 +300,15 @@ export function openPlaytest(deck, overlay) {
       </div>
 
       <div class="playtest__zone playtest__zone--hand" data-dropzone="hand">
-        <h4>Hand <span class="count">${state.hand.length}</span></h4>
-        <div class="playtest__cards">
+        <h4>Hand <span class="count">${state.hand.length}</span>
+          <span class="playtest__sort">
+            Sort:
+            <button data-action="sort-hand" data-sort="cmc">CMC</button>
+            <button data-action="sort-hand" data-sort="type">Type</button>
+            <button data-action="sort-hand" data-sort="name">Name</button>
+          </span>
+        </h4>
+        <div class="playtest__cards playtest__cards--hand">
           ${state.hand.length ? cardRow(state.hand) : `<span class="playtest__empty-hint">No cards in hand.</span>`}
         </div>
       </div>
@@ -369,6 +389,7 @@ export function openPlaytest(deck, overlay) {
       else if (action === 'life-dec') state.life--;
       else if (action === 'turn-inc') state.turn++;
       else if (action === 'turn-dec') state.turn = Math.max(1, state.turn - 1);
+      else if (action === 'sort-hand') sortHand(state.hand, actionEl.dataset.sort);
       render();
       return;
     }

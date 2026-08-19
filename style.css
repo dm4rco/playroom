@@ -475,6 +475,36 @@ html, body {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
+/* Cap the hand at ~2 rows and scroll internally instead of growing the
+   whole zone taller — otherwise drawing a lot of cards pushes the rest of
+   the board out of reach. */
+.playtest__cards--hand {
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+  padding-bottom: 4px;
+}
+.playtest__sort {
+  font-weight: 400;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.playtest__sort button {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.playtest__sort button:hover { border-color: var(--accent); color: var(--text); }
 .playtest__banner {
   background: rgba(124, 92, 255, 0.12);
   border: 1px solid var(--accent);

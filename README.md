@@ -68,6 +68,9 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     battlefield card to tap/untap it (rotates 90°, and battlefield slots
     always reserve room for the rotation so nothing jumps around). Click your
     commander in the Command Zone to cast it.
+  - The Hand caps at ~2 rows and scrolls internally beyond that, so drawing a
+    lot of cards doesn't push the rest of the board out of reach. Sort
+    buttons (CMC / Type / Name) in the Hand header reorder it on demand.
   - The battlefield is split into Creatures / Other / Lands rows so permanents
     are easy to scan; drop a card anywhere in the battlefield area and it
     lands in the right row automatically.
