@@ -482,6 +482,14 @@ html, body {
 .playtest__zone--command {
   transition: background-color 0.1s ease, border-color 0.1s ease;
 }
+/* Hovering a fanned-out card bumps its z-index (below) so it doesn't stay
+   hidden behind the next card in the row — but without a stacking context
+   of its own, that elevated z-index escaped Battlefield/Command entirely
+   and could paint over neighboring zones like Hand. Contain it. */
+.playtest__zone--battlefield,
+.playtest__zone--command {
+  isolation: isolate;
+}
 /* .playtest__zone's flex:1 is meant for battlefield/hand as row siblings —
    inside the column-direction leftcol, it was instead making the Command
    Zone greedily grow to fill all of leftcol's stretched height, shoving the
