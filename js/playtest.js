@@ -546,6 +546,13 @@ function App({ deck, overlay, onExit }) {
 
   const doAction = (fn) => () => { pushHistory(); fn(); commit(); };
 
+  // Advancing a turn is also an untap step, same as paper Magic — saves
+  // clicking through a big board of tapped cards by hand every turn.
+  const nextTurn = () => {
+    stateRef.current.turn++;
+    stateRef.current.battlefield.forEach(c => { c.tapped = false; });
+  };
+
   const onSortHand = (mode) => (e) => {
     e.stopPropagation();
     pushHistory();
@@ -561,7 +568,7 @@ function App({ deck, overlay, onExit }) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
       if (e.key === 'ArrowLeft' || key === 'a') { e.preventDefault(); pushHistory(); stateRef.current.turn = Math.max(1, stateRef.current.turn - 1); commit(); }
-      else if (e.key === 'ArrowRight' || key === 'd') { e.preventDefault(); pushHistory(); stateRef.current.turn++; commit(); }
+      else if (e.key === 'ArrowRight' || key === 'd') { e.preventDefault(); pushHistory(); nextTurn(); commit(); }
       else if (e.key === 'ArrowUp' || key === 'w') { e.preventDefault(); pushHistory(); stateRef.current.life++; commit(); }
       else if (e.key === 'ArrowDown' || key === 's') { e.preventDefault(); pushHistory(); stateRef.current.life--; commit(); }
       else if (e.code === 'Space') { e.preventDefault(); pushHistory(); drawN(stateRef.current, 1); commit(); }
@@ -599,7 +606,7 @@ function App({ deck, overlay, onExit }) {
         <span class="playtest__stat">Turn
           <button onClick=${doAction(() => { stateRef.current.turn = Math.max(1, stateRef.current.turn - 1); })}>−</button>
           <strong>${state.turn}</strong>
-          <button onClick=${doAction(() => { stateRef.current.turn++; })}>+</button>
+          <button onClick=${doAction(nextTurn)}>+</button>
         </span>
         <span class="playtest__stat">Life
           <button onClick=${doAction(() => { stateRef.current.life--; })}>−</button>
