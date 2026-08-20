@@ -644,7 +644,28 @@ html, body {
   overflow-y: auto;
   padding-right: 4px;
   padding-bottom: 4px;
+  transition: max-height 0.2s ease;
 }
+/* Collapsed hand — cards stay in the DOM (nothing is discarded), just
+   folded away to reclaim vertical space, most useful on a short mobile
+   viewport. Toggled via the ▼ button or the Control key. */
+.playtest__zone--hand.hand-collapsed .playtest__cards--hand {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+.playtest__hand-toggle {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 5px;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+}
+.playtest__hand-toggle:hover { border-color: var(--accent); color: var(--text); }
 .playtest__sort {
   font-weight: 400;
   font-size: 12px;

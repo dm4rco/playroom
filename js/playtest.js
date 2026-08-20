@@ -98,6 +98,7 @@ const TIPS = [
   { action: 'Adjust turn', control: '← → or A D' },
   { action: 'Adjust life', control: '↑ ↓ or W S' },
   { action: 'Undo', control: 'Undo button, or browser Back' },
+  { action: 'Collapse/expand Hand', control: '▼ button, or Control' },
   { action: 'Toggle this panel', control: 'T' },
 ];
 
@@ -316,6 +317,7 @@ function App({ deck, overlay, onExit }) {
   const [state, setState] = useState(() => resetGame(deck));
   const [browsingZone, setBrowsingZoneState] = useState(null);
   const [showTips, setShowTips] = useState(false);
+  const [handCollapsed, setHandCollapsed] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
   const undoStack = useRef([]);
@@ -568,6 +570,7 @@ function App({ deck, overlay, onExit }) {
       else if (e.code === 'Space') { e.preventDefault(); pushHistory(); drawN(stateRef.current, 1); commit(); }
       else if (e.key === 'Enter') { e.preventDefault(); setBrowsingZoneState('library'); }
       else if (key === 't') { e.preventDefault(); setShowTips(v => !v); }
+      else if (e.key === 'Control' && !e.repeat) { setHandCollapsed(v => !v); }
       else if (e.key === 'Escape') { setShowTips(false); }
     };
     const onPopState = () => {
@@ -679,7 +682,7 @@ function App({ deck, overlay, onExit }) {
       </div>
     </div>
 
-    <div class="playtest__zone playtest__zone--hand" data-dropzone="hand">
+    <div class=${`playtest__zone playtest__zone--hand${handCollapsed ? ' hand-collapsed' : ''}`} data-dropzone="hand">
       <h4>Hand <span class="count">${state.hand.length}</span>
         <span class="playtest__sort">
           Sort:
@@ -687,6 +690,7 @@ function App({ deck, overlay, onExit }) {
           <button onClick=${onSortHand('type')}>Type</button>
           <button onClick=${onSortHand('name')}>Name</button>
         </span>
+        <button class="playtest__hand-toggle" title="Collapse/expand hand (Control)" onClick=${() => setHandCollapsed(v => !v)}>${handCollapsed ? '▲' : '▼'}</button>
       </h4>
       <div class="playtest__cards playtest__cards--hand">
         ${state.hand.length
