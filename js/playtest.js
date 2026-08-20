@@ -84,22 +84,17 @@ const HAND_SORT_TYPE_ORDER = ['Creature', 'Planeswalker', 'Battle', 'Instant', '
 const DRAG_THRESHOLD = 6; // px of pointer movement before a press becomes a drag, not a click
 const LONG_PRESS_DELAY = 550; // ms — touch has no hover, so a held (but still) press peeks a full-size preview instead
 
+// Short and worth actually memorizing — everything else (click to play,
+// drag to move, etc.) is discoverable on its own and doesn't need a tip.
 const TIPS = [
-  { action: 'View a card full-size', control: 'Hover it, or long-press on touch' },
-  { action: 'Flip a double-faced card', control: 'Tap the ⟲ badge, or right-click' },
-  { action: 'Play a hand card', control: 'Click it' },
-  { action: 'Tap / untap a battlefield card', control: 'Click it' },
-  { action: 'Cast your commander', control: 'Click it in the Command Zone' },
-  { action: 'Draw a card', control: 'Click the Library, or Space' },
-  { action: 'Browse the Library (tutor effects)', control: 'Double-click the Library, or Enter' },
-  { action: 'Browse Graveyard / Exile / Tokens', control: 'Click the pile' },
-  { action: 'Move a card to any zone', control: 'Drag it there' },
-  { action: 'Reorder Hand / Battlefield', control: 'Drag a card onto another' },
   { action: 'Adjust turn', control: '← → or A D' },
   { action: 'Adjust life', control: '↑ ↓ or W S' },
-  { action: 'Undo', control: 'Undo button, or browser Back' },
-  { action: 'Collapse/expand Hand', control: '▼ button, or Control' },
+  { action: 'Draw a card', control: 'Space' },
+  { action: 'Browse the Library (tutor effects)', control: 'Enter' },
+  { action: 'Collapse/expand Hand', control: 'Control' },
   { action: 'Toggle this panel', control: 'T' },
+  { action: 'Undo', control: 'Browser Back' },
+  { action: 'Flip a double-faced card', control: 'Right-click' },
 ];
 
 // ---------- Pure game logic (unchanged from playtest.js) ----------
