@@ -491,6 +491,10 @@ function App({ deck, overlay, onExit }) {
 
   const onCardPointerDown = (uid) => (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // Without this, the browser starts its own native text-selection drag
+    // on mousedown before our threshold ever sees the movement — visible
+    // as the page highlighting/selecting while dragging a card.
+    e.preventDefault();
     const located = locateCard(stateRef.current, uid);
     if (!located) return;
     const showingBack = located.card.flipped && located.card.data.backImage;

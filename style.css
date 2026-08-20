@@ -400,6 +400,9 @@ html, body {
   z-index: 200;
   overflow-y: auto;
   padding: 20px 24px;
+  /* It's a game board, not reading material — and without this, dragging a
+     card visibly selects the surrounding text on top of the drag itself. */
+  user-select: none;
   /* Card/slot sizing as variables so the mobile-landscape media query
      (below) can rescale everything with a handful of overrides instead of
      duplicating every rule that touches a card's dimensions. */
