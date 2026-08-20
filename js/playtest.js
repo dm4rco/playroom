@@ -264,7 +264,6 @@ function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick,
     <div class=${`playtest__card-slot${tight ? ' playtest__card-slot--tight' : ''}`} key=${c.uid}>
       <div
         class=${`playtest__card${c.tapped ? ' tapped' : ''}`}
-        title=${displayName}
         data-uid=${c.uid}
         data-zone=${zone}
         onClick=${onClick}
@@ -295,7 +294,6 @@ function TokenTile({ t, onClick }) {
     <div class="playtest__card-slot" key=${t.name}>
       <div
         class="playtest__card"
-        title=${t.name}
         data-token-name=${t.name}
         onClick=${onClick}
         onMouseEnter=${(e) => showCardPreview(fullImg, e.clientX, e.clientY)}
