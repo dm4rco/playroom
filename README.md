@@ -19,7 +19,7 @@ The commander is detected from any category containing the word
 "Commander". A ready-made example is in [sample-decklist.txt](sample-decklist.txt).
 
 You can also paste an Archidekt deck URL (e.g.
-`https://archidekt.com/decks/25521882/vihaan_goldwaker`) into the "Fetch from
+`https://archidekt.com/decks/1234567/deck_name`) into the "Fetch from
 Archidekt" box and it'll convert the deck into this format for you — works for
 both new imports and editing an existing deck.
 
