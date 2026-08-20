@@ -67,8 +67,12 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   back. Rendered with Preact+htm loaded from a CDN as ES modules (no build
   step, no npm — still just static files pushed to GitHub Pages).
   - Press **T** in the playtester for the full list of controls (hover to
-    preview, click to play/tap/cast/draw, right-click to flip a double-faced
-    card, drag to move or reorder, arrow keys/WASD, Space, Enter, etc).
+    preview, click to play/tap/cast/draw, tap the ⟲ badge or right-click to
+    flip a double-faced card, drag to move or reorder, arrow keys/WASD,
+    Space, Enter, etc). Works on touch too — dragging, tap-to-flip, and a
+    long-press peek preview all use Pointer Events, so mouse and touch share
+    the same code path. In portrait on a phone the playtester asks you to
+    rotate; landscape gets a compact version of the same layout.
   - Hovering a hand card previews it without moving it; clicking it plays it.
     Battlefield slots always reserve room for a tapped (rotated) card so
     nothing jumps around, and the Command Zone/battlefield rows fan

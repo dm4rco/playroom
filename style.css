@@ -19,11 +19,45 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  /* The sidebar/deck layout isn't responsive yet and can overflow a narrow
+     phone width — without this, mobile browsers expand the whole page's
+     layout viewport to fit that overflow and zoom everything out (including
+     the playtest overlay, which is position:fixed and inherits that same
+     viewport), rather than clipping it and letting each part scroll on its
+     own. */
+  overflow-x: hidden;
 }
 
 .app {
   display: flex;
   min-height: 100vh;
+}
+
+/* Mobile sidebar drawer (hamburger + backdrop) — hidden on desktop, see the
+   mobile media query at the end of this file for what activates them. */
+.mobile-sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 60;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 17px;
+  cursor: pointer;
+}
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 45;
 }
 
 /* Sidebar */
@@ -323,6 +357,27 @@ html, body {
   border: 1px solid var(--border);
 }
 
+/* Floating "lifted card" that follows the pointer during a pointer-events
+   drag (mouse or touch) — see card-drag-ghost usage in playtest.js. */
+.card-drag-ghost {
+  display: none;
+  position: fixed;
+  z-index: 320;
+  pointer-events: none;
+  transform: translate(-50%, -120%);
+  opacity: 0.9;
+}
+.card-drag-ghost.open { display: block; }
+.card-drag-ghost img {
+  display: block;
+  width: 110px;
+  aspect-ratio: 5/7;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid var(--accent);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
 /* Playtest launcher button */
 .playtest-btn {
   position: fixed;
@@ -340,6 +395,14 @@ html, body {
   z-index: 200;
   overflow-y: auto;
   padding: 20px 24px;
+  /* Card/slot sizing as variables so the mobile-landscape media query
+     (below) can rescale everything with a handful of overrides instead of
+     duplicating every rule that touches a card's dimensions. */
+  --card-w: 130px;
+  --card-h: 182px;
+  --card-bf: 182px; /* square battlefield/command slot — room for a tapped (rotated) card */
+  --overlap: -95px; /* fanned-card overlap amount */
+  --overlap-tight: -160px; /* tighter overlap for consecutive same-name cards */
 }
 .playtest-overlay.open { display: block; }
 
@@ -467,8 +530,8 @@ html, body {
 
 .playtest__cards { display: flex; flex-wrap: wrap; gap: 10px; }
 .playtest__card-slot {
-  width: 130px;
-  height: 182px;
+  width: var(--card-w);
+  height: var(--card-h);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -477,7 +540,7 @@ html, body {
 /* Battlefield/Command slots reserve a square footprint big enough for a
    tapped (rotated) card, so tapping/untapping never reflows neighbors. */
 .playtest__zone--battlefield .playtest__card-slot,
-.playtest__zone--command .playtest__card-slot { width: 182px; height: 182px; }
+.playtest__zone--command .playtest__card-slot { width: var(--card-bf); height: var(--card-bf); }
 
 /* Battlefield rows (and the Command Zone, which almost always holds just 1-2
    cards) overlap cards like a fanned stack instead of wrapping to a new row
@@ -492,19 +555,19 @@ html, body {
 }
 .playtest__zone--battlefield .playtest__card-slot,
 .playtest__zone--command .playtest__card-slot {
-  margin-left: -95px;
+  margin-left: var(--overlap);
   position: relative;
 }
 .playtest__zone--battlefield .playtest__card-slot:first-child,
 .playtest__zone--command .playtest__card-slot:first-child { margin-left: 0; }
 /* A copy of the same card right before it — no need to see it clearly,
    just that it's there, so overlap much tighter than usual. */
-.playtest__zone--battlefield .playtest__card-slot--tight { margin-left: -160px; }
+.playtest__zone--battlefield .playtest__card-slot--tight { margin-left: var(--overlap-tight); }
 .playtest__zone--battlefield .playtest__card-slot:hover,
 .playtest__zone--command .playtest__card-slot:hover { z-index: 5; }
 .playtest__card {
   position: relative;
-  width: 130px;
+  width: var(--card-w);
   aspect-ratio: 5/7;
   border-radius: 8px;
   overflow: hidden;
@@ -512,7 +575,20 @@ html, body {
   cursor: grab;
   transition: transform 0.1s ease;
   flex-shrink: 0;
+  /* Pointer-events dragging owns the gesture on a card (mouse + touch
+     alike) — default to blocking the browser's own touch-scroll/pan so the
+     first bit of finger movement doesn't get eaten by native scrolling
+     before our drag threshold ever sees it. Zones that scroll (below)
+     reopen just their own scroll axis, so a packed row stays swipeable. */
+  touch-action: none;
 }
+/* Battlefield/Command scroll horizontally, Hand scrolls vertically — allow
+   native touch panning along that one axis so a dense row/hand can still
+   be scrolled by touch, while the perpendicular axis stays free for our
+   own pointer-drag (moving/reordering a card) to intercept. */
+.playtest__zone--battlefield .playtest__card,
+.playtest__zone--command .playtest__card { touch-action: pan-x; }
+.playtest__zone--hand .playtest__card { touch-action: pan-y; }
 .playtest__card:hover { transform: translateY(-4px); border-color: var(--accent); }
 .playtest__card:active { cursor: grabbing; }
 .playtest__card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
@@ -545,8 +621,9 @@ html, body {
   align-items: center;
   justify-content: center;
   z-index: 2;
-  pointer-events: none;
+  cursor: pointer;
 }
+.playtest__card-flip-badge:hover { background: var(--accent); }
 .playtest__zone--hand {
   position: sticky;
   bottom: 0;
@@ -647,3 +724,105 @@ html, body {
 .tips-list li:last-child { border-bottom: none; }
 .tips-list__action { color: var(--text); }
 .tips-list__control { color: var(--text-dim); font-size: 13px; text-align: right; white-space: nowrap; }
+
+/* Rotate-device gate: the row-based board (Command Zone/Battlefield/side
+   piles side by side) needs width more than height, so on a narrow phone in
+   portrait there's nowhere to put it — ask for a turn instead of squeezing
+   a desktop layout into a column it was never designed for. Landscape gets
+   a real (if compact) layout via the media query below instead. */
+.playtest__rotate-gate {
+  display: none;
+  min-height: 70vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  color: var(--text-dim);
+  padding: 40px 20px;
+}
+.playtest__rotate-gate .icon { font-size: 44px; }
+.playtest__rotate-gate h3 { color: var(--text); margin: 0; font-size: 18px; }
+.playtest__rotate-gate p { margin: 0; font-size: 14px; max-width: 320px; }
+
+@media (max-width: 900px) and (orientation: portrait) {
+  .playtest__main { display: none; }
+  .playtest__rotate-gate { display: flex; }
+}
+
+/* Compact card/board sizing for a landscape phone — same layout as desktop
+   (nothing restructures), just scaled down to fit a short viewport. */
+@media (max-width: 900px) and (orientation: landscape) {
+  .playtest-overlay {
+    padding: 10px 12px;
+    --card-w: 74px;
+    --card-h: 104px;
+    --card-bf: 104px;
+    --overlap: -52px;
+    --overlap-tight: -88px;
+  }
+  .playtest__topbar { margin-bottom: 6px; padding-bottom: 6px; gap: 6px 10px; }
+  .playtest__title { font-size: 13px; }
+  .playtest__controls { gap: 5px; }
+  .playtest__controls .btn { padding: 4px 8px; font-size: 12px; }
+  .playtest__stat { padding: 3px 7px; gap: 4px; }
+  .playtest__stat strong { font-size: 13px; }
+  .playtest__stat button { width: 18px; height: 18px; }
+  .playtest__hint { margin-bottom: 6px; font-size: 11px; }
+  .playtest__board { gap: 8px; margin-bottom: 8px; }
+  .playtest__leftcol { flex: 0 0 104px; gap: 6px; }
+  .playtest__sidezones { flex: 0 0 84px; gap: 6px; }
+  .playtest__zone h4 { margin: 0 0 5px; font-size: 11px; }
+  .playtest__zone--battlefield { min-height: 104px; padding: 6px; }
+  .playtest__battlefield-row { margin-bottom: 5px; }
+  .playtest__battlefield-label { font-size: 9px; margin-bottom: 3px; }
+  .playtest__pile--tokens { height: 44px; }
+  .playtest__pile--libbottom { height: 20px; font-size: 9px; }
+  .playtest__pile strong { font-size: 16px; }
+  .playtest__pile { font-size: 11px; gap: 2px; }
+  .playtest__cards { gap: 5px; }
+  .playtest__cards--hand { max-height: 130px; }
+  .card-drag-ghost img { width: 74px; }
+  /* Bigger tap target for the flip badge — 18px is fine for a mouse
+     pointer but too small to reliably hit with a finger. */
+  .playtest__card-flip-badge { width: 24px; height: 24px; font-size: 13px; top: 2px; right: 2px; }
+}
+
+/* Mobile site chrome — the sidebar becomes an off-canvas drawer (opened via
+   the hamburger button, closed via its own toggle, the backdrop, or picking
+   a deck) instead of sitting beside the content as a fixed column, and the
+   content column drops its desktop padding. Same breakpoint the charts
+   grid already used, so everything switches to single-column together. */
+@media (max-width: 700px) {
+  .mobile-sidebar-toggle { display: flex; }
+  .sidebar-backdrop.visible { display: block; }
+
+  .app { display: block; }
+  .sidebar,
+  .sidebar.collapsed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    width: 82vw;
+    max-width: 320px;
+    z-index: 50;
+    padding: 20px;
+    transition: transform 0.2s ease;
+  }
+  .sidebar { transform: translateX(0); }
+  .sidebar.collapsed { transform: translateX(-100%); }
+  /* Mobile "collapsed" means off-screen, not the desktop icon rail — keep
+     the drawer's own contents at full size regardless of that class. */
+  .sidebar.collapsed .sidebar__header,
+  .sidebar.collapsed .deck-list { display: flex; }
+  .sidebar.collapsed .btn-label { display: inline; }
+  .sidebar.collapsed #new-deck-btn { width: auto; padding: 9px 14px; }
+
+  .content { padding: 70px 16px 24px; max-width: none; }
+  .deck-header { flex-wrap: wrap; }
+  .deck-header__stats { flex-wrap: wrap; gap: 16px; }
+  .deck-actions { flex-wrap: wrap; }
+  .import-panel { padding: 18px; }
+  .import-panel__source { flex-direction: column; }
+}

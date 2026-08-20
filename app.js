@@ -28,6 +28,8 @@ const els = {
   playtestOverlay: document.getElementById('playtest-overlay'),
   sidebar: document.getElementById('sidebar'),
   sidebarToggle: document.getElementById('sidebar-toggle'),
+  mobileSidebarToggle: document.getElementById('mobile-sidebar-toggle'),
+  sidebarBackdrop: document.getElementById('sidebar-backdrop'),
 };
 
 let currentDeckName = null;
@@ -75,6 +77,7 @@ function selectDeck(name) {
   els.playtestBtn.classList.remove('hidden');
   renderDeck(deck, els.main);
   renderSidebar();
+  closeMobileSidebar();
 }
 
 function showImportPanel(prefillName = '', prefillText = '', isEdit = false) {
@@ -153,7 +156,7 @@ async function doImport(forceRefresh = false) {
   }
 }
 
-els.newDeckBtn.addEventListener('click', () => showImportPanel());
+els.newDeckBtn.addEventListener('click', () => { showImportPanel(); closeMobileSidebar(); });
 els.importCancel.addEventListener('click', hideImportPanel);
 els.importSubmit.addEventListener('click', () => doImport(false));
 
@@ -224,19 +227,43 @@ els.playtestBtn.addEventListener('click', () => {
 });
 
 const SIDEBAR_COLLAPSED_KEY = 'edh_sidebar_collapsed';
+const isMobileViewport = () => window.matchMedia('(max-width: 700px)').matches;
+// On desktop "collapsed" shrinks the sidebar to an icon rail — a real
+// preference, persisted. On mobile the same class instead means the drawer
+// is off-screen, which is a transient per-visit thing (always starts
+// closed), not a preference — kept in memory only, on its own variable, so
+// testing/using the drawer on a phone can never leave a desktop visit
+// stuck collapsed (they used to share one localStorage key).
+let mobileDrawerOpen = false;
 
 function applySidebarState() {
-  const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  const collapsed = isMobileViewport()
+    ? !mobileDrawerOpen
+    : localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
   els.sidebar.classList.toggle('collapsed', collapsed);
   els.sidebarToggle.textContent = collapsed ? '›' : '‹';
   els.sidebarToggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  els.sidebarBackdrop.classList.toggle('visible', !collapsed);
+}
+
+function setSidebarCollapsed(collapsed) {
+  if (isMobileViewport()) mobileDrawerOpen = !collapsed;
+  else localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+  applySidebarState();
+}
+
+// Only meaningful on mobile (the sidebar isn't an overlay on desktop, so
+// there's nothing to close) — called after an action that reveals content
+// the drawer would otherwise be covering.
+function closeMobileSidebar() {
+  if (isMobileViewport()) setSidebarCollapsed(true);
 }
 
 els.sidebarToggle.addEventListener('click', () => {
-  const collapsed = els.sidebar.classList.contains('collapsed');
-  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '0' : '1');
-  applySidebarState();
+  setSidebarCollapsed(!els.sidebar.classList.contains('collapsed'));
 });
+els.mobileSidebarToggle.addEventListener('click', () => setSidebarCollapsed(false));
+els.sidebarBackdrop.addEventListener('click', () => setSidebarCollapsed(true));
 
 // init
 applySidebarState();

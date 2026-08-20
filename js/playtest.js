@@ -53,6 +53,27 @@ function hideCardPreview() {
   document.getElementById('card-hover-preview')?.classList.remove('open');
 }
 
+// Floating "lifted card" shown while pointer-dragging — a single reused DOM
+// node, same pattern as the hover preview. Pointer Events unify mouse and
+// touch, which is what lets dragging work on mobile without a separate code
+// path for desktop.
+function ensureGhostEl() {
+  let el = document.getElementById('card-drag-ghost');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'card-drag-ghost';
+    el.className = 'card-drag-ghost';
+    el.appendChild(document.createElement('img'));
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function positionGhost(el, x, y) {
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
 const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'];
 const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
@@ -60,10 +81,12 @@ const DBLCLICK_WINDOW = 250;
 const BROWSABLE_ZONES = { library: 'Library', graveyard: 'Graveyard', exile: 'Exile', tokens: 'Tokens' };
 const DRAW_PILE_KEY = '__draw-pile__';
 const HAND_SORT_TYPE_ORDER = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'];
+const DRAG_THRESHOLD = 6; // px of pointer movement before a press becomes a drag, not a click
+const LONG_PRESS_DELAY = 450; // ms — touch has no right-click, so a held press flips a double-faced card instead
 
 const TIPS = [
-  { action: 'View a card full-size', control: 'Hover it' },
-  { action: 'Flip a double-faced card', control: 'Right-click' },
+  { action: 'View a card full-size', control: 'Hover it, or long-press on touch' },
+  { action: 'Flip a double-faced card', control: 'Tap the ⟲ badge, or right-click' },
   { action: 'Play a hand card', control: 'Click it' },
   { action: 'Tap / untap a battlefield card', control: 'Click it' },
   { action: 'Cast your commander', control: 'Click it in the Command Zone' },
@@ -236,7 +259,7 @@ function snapshot(state) {
 
 // ---------- Rendering (Preact) ----------
 
-function CardTile({ c, onClick, onDragStart, onContextMenu, onCardDragOver, onCardDragLeave, onCardDrop, tight }) {
+function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick, tight }) {
   const showingBack = c.flipped && c.data.backImage;
   const smallImg = showingBack ? (c.data.backImageSmall || c.data.backImage) : (c.data.image_small || c.data.image);
   const fullImg = showingBack ? (c.data.backImage || c.data.backImageSmall) : (c.data.image || c.data.image_small);
@@ -245,21 +268,18 @@ function CardTile({ c, onClick, onDragStart, onContextMenu, onCardDragOver, onCa
     <div class=${`playtest__card-slot${tight ? ' playtest__card-slot--tight' : ''}`} key=${c.uid}>
       <div
         class=${`playtest__card${c.tapped ? ' tapped' : ''}`}
-        draggable="true"
         title=${displayName}
         data-uid=${c.uid}
+        data-zone=${zone}
         onClick=${onClick}
-        onDragStart=${onDragStart}
+        onPointerDown=${onPointerDown}
         onContextMenu=${onContextMenu}
-        onDragOver=${onCardDragOver}
-        onDragLeave=${onCardDragLeave}
-        onDrop=${onCardDrop}
         onMouseEnter=${(e) => showCardPreview(fullImg, e.clientX, e.clientY)}
         onMouseMove=${(e) => moveCardPreview(e.clientX, e.clientY)}
         onMouseLeave=${() => hideCardPreview()}
       >
         <img loading="lazy" src=${smallImg} alt=${displayName} />
-        ${c.data.backImage ? html`<span class="playtest__card-flip-badge" title="Right-click to flip">⟲</span>` : ''}
+        ${c.data.backImage ? html`<span class="playtest__card-flip-badge" title="Flip: tap this, or right-click the card" onClick=${onFlipClick}>⟲</span>` : ''}
       </div>
     </div>
   `;
@@ -300,7 +320,8 @@ function App({ deck, overlay, onExit }) {
   stateRef.current = state;
   const undoStack = useRef([]);
   const pendingClick = useRef(null); // { id, uid } — only used to debounce the Library pile's click-to-draw vs. double-click-to-browse
-  const draggedUid = useRef(null);
+  const dragRef = useRef(null); // { uid, fromZone, startX, startY, dragging, previewImg, lastTarget, longPressTimer, longPressFired } — the in-flight pointer drag, if any
+  const suppressClickUntil = useRef(0); // Date.now() cutoff — swallows the ghost click a drag or long-press-flip leaves behind
   const deckTokens = deck.tokens || [];
 
   const commit = () => setState({ ...stateRef.current });
@@ -349,17 +370,29 @@ function App({ deck, overlay, onExit }) {
 
   const onCardClick = (uid) => (e) => {
     e.stopPropagation();
+    if (Date.now() < suppressClickUntil.current) return; // ghost click left behind by a drag or long-press flip
     handleCardClick(uid);
   };
 
-  const onCardContextMenu = (uid) => (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const flipCard = (uid) => {
     const located = locateCard(stateRef.current, uid);
     if (!located || !located.card.data.backImage) return;
     pushHistory();
     located.card.flipped = !located.card.flipped;
     commit();
+  };
+
+  const onCardContextMenu = (uid) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    flipCard(uid);
+  };
+
+  // Same action as right-click, but as an actual tap target — the badge is
+  // the only flip trigger that works on touch without a long-press.
+  const onFlipBadgeClick = (uid) => (e) => {
+    e.stopPropagation();
+    flipCard(uid);
   };
 
   const onTokenClick = (template) => (e) => {
@@ -369,67 +402,123 @@ function App({ deck, overlay, onExit }) {
     commit();
   };
 
-  const onDragStart = (uid) => (e) => {
-    hideCardPreview();
-    draggedUid.current = uid;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', uid);
+  // Pointer-based drag-and-drop: Pointer Events fire the same way for mouse,
+  // touch, and pen, so this one implementation covers both desktop drag and
+  // mobile touch-drag (unlike the native HTML5 DnD API it replaces, which
+  // never fires on touch at all). A press only becomes a "drag" once the
+  // pointer moves past DRAG_THRESHOLD — short of that it's left alone so the
+  // element's native click still fires normally (play/tap/etc), on both
+  // mouse and touch.
+  const clearDropHighlights = () => {
+    document.querySelectorAll('.drop-hover').forEach(el => el.classList.remove('drop-hover'));
+    document.querySelectorAll('.insert-before, .insert-after').forEach(el => el.classList.remove('insert-before', 'insert-after'));
   };
 
-  // Manual reordering within Hand/Battlefield: dropping one card onto
-  // another (same zone) inserts it before/after based on cursor position,
-  // instead of the usual "drop anywhere in the zone" cross-zone move. Drags
-  // from a different zone fall through untouched to the zone's own drop
-  // handler (zoneDropProps), which does the normal cross-zone move.
-  const onCardDragOver = (zone, targetUid) => (e) => {
-    const dragged = draggedUid.current;
-    if (!dragged || dragged === targetUid) return;
-    const located = locateCard(stateRef.current, dragged);
-    if (!located || located.zone !== zone) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const insertAfter = (e.clientX - rect.left) > rect.width / 2;
-    e.currentTarget.classList.toggle('insert-before', !insertAfter);
-    e.currentTarget.classList.toggle('insert-after', insertAfter);
+  const endDrag = () => {
+    if (dragRef.current?.longPressTimer) clearTimeout(dragRef.current.longPressTimer);
+    document.getElementById('card-drag-ghost')?.classList.remove('open');
+    hideCardPreview(); // in case a long-press peek was open
+    clearDropHighlights();
+    dragRef.current = null;
   };
 
-  const onCardDragLeaveReorder = (e) => {
-    e.currentTarget.classList.remove('insert-before', 'insert-after');
+  // Hit-tests whatever's under the pointer: another card in the same zone
+  // (reorder) beats a zone/pile drop target (cross-zone move) beats nothing.
+  const resolveDropTarget = (x, y, fromZone, uid) => {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    const cardEl = el.closest('[data-uid]');
+    if (cardEl && cardEl.dataset.uid !== uid && cardEl.dataset.zone === fromZone) {
+      const rect = cardEl.getBoundingClientRect();
+      const insertAfter = (x - rect.left) > rect.width / 2;
+      return { kind: 'reorder', el: cardEl, targetUid: cardEl.dataset.uid, insertAfter };
+    }
+    const zoneEl = el.closest('[data-dropzone]');
+    if (zoneEl) return { kind: 'zone', el: zoneEl, zoneName: zoneEl.dataset.dropzone, toBottom: zoneEl.dataset.toBottom === 'true' };
+    return null;
   };
 
-  const onCardDropReorder = (zone, targetUid) => (e) => {
-    const dragged = draggedUid.current;
-    e.currentTarget.classList.remove('insert-before', 'insert-after');
-    if (!dragged || dragged === targetUid) return;
-    const located = locateCard(stateRef.current, dragged);
-    if (!located || located.zone !== zone) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const insertAfter = (e.clientX - rect.left) > rect.width / 2;
-    pushHistory();
-    reorderWithinZone(stateRef.current, zone, dragged, targetUid, insertAfter);
-    commit();
-    draggedUid.current = null;
+  const onPointerCancelGlobal = () => {
+    window.removeEventListener('pointermove', onPointerMoveGlobal);
+    window.removeEventListener('pointerup', onPointerUpGlobal);
+    window.removeEventListener('pointercancel', onPointerCancelGlobal);
+    endDrag();
   };
 
-  const zoneDropProps = (zoneName, toBottom = false) => ({
-    onDragOver: (e) => { e.preventDefault(); e.currentTarget.classList.add('drop-hover'); },
-    onDragLeave: (e) => { e.currentTarget.classList.remove('drop-hover'); },
-    onDrop: (e) => {
-      e.preventDefault();
-      e.currentTarget.classList.remove('drop-hover');
-      if (!draggedUid.current) return;
-      const located = locateCard(stateRef.current, draggedUid.current);
-      if (located && located.zone !== zoneName) {
+  const onPointerMoveGlobal = (e) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (!drag.dragging) {
+      const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+      if (dist < DRAG_THRESHOLD) return;
+      clearTimeout(drag.longPressTimer); // a real drag takes priority over a pending long-press flip
+      drag.dragging = true;
+      hideCardPreview();
+      const ghost = ensureGhostEl();
+      ghost.querySelector('img').src = drag.previewImg;
+      ghost.classList.add('open');
+    }
+    e.preventDefault(); // stop touch-scroll once an actual drag is underway
+    positionGhost(document.getElementById('card-drag-ghost'), e.clientX, e.clientY);
+    clearDropHighlights();
+    const target = resolveDropTarget(e.clientX, e.clientY, drag.fromZone, drag.uid);
+    if (target?.kind === 'reorder') target.el.classList.add(target.insertAfter ? 'insert-after' : 'insert-before');
+    else if (target?.kind === 'zone') target.el.classList.add('drop-hover');
+    drag.lastTarget = target;
+  };
+
+  const onPointerUpGlobal = () => {
+    const drag = dragRef.current;
+    window.removeEventListener('pointermove', onPointerMoveGlobal);
+    window.removeEventListener('pointerup', onPointerUpGlobal);
+    window.removeEventListener('pointercancel', onPointerCancelGlobal);
+    if (drag?.dragging) {
+      const target = drag.lastTarget;
+      if (target?.kind === 'reorder') {
         pushHistory();
-        moveCard(stateRef.current, draggedUid.current, zoneName, { toBottom });
+        reorderWithinZone(stateRef.current, drag.fromZone, drag.uid, target.targetUid, target.insertAfter);
+        commit();
+      } else if (target?.kind === 'zone' && target.zoneName !== drag.fromZone) {
+        pushHistory();
+        moveCard(stateRef.current, drag.uid, target.zoneName, { toBottom: target.toBottom });
         commit();
       }
-      draggedUid.current = null;
-    },
-  });
+    }
+    endDrag();
+  };
+
+  const onCardPointerDown = (uid) => (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const located = locateCard(stateRef.current, uid);
+    if (!located) return;
+    const showingBack = located.card.flipped && located.card.data.backImage;
+    const previewImg = showingBack
+      ? (located.card.data.backImageSmall || located.card.data.image_small)
+      : (located.card.data.image_small || located.card.data.image);
+    const fullImg = showingBack
+      ? (located.card.data.backImage || located.card.data.backImageSmall)
+      : (located.card.data.image || located.card.data.image_small);
+    const drag = {
+      uid, fromZone: located.zone, startX: e.clientX, startY: e.clientY,
+      dragging: false, previewImg, lastTarget: null, longPressTimer: null, longPressFired: false,
+    };
+    dragRef.current = drag;
+    // Touch has no hover, so a held (but still) press peeks the full-size
+    // preview instead — released on pointerup, cancelled if it turns into
+    // an actual drag (see the threshold check above).
+    if (e.pointerType !== 'mouse') {
+      drag.longPressTimer = setTimeout(() => {
+        if (dragRef.current !== drag || drag.dragging) return;
+        drag.longPressFired = true;
+        suppressClickUntil.current = Date.now() + 300;
+        navigator.vibrate?.(15);
+        showCardPreview(fullImg, e.clientX, e.clientY);
+      }, LONG_PRESS_DELAY);
+    }
+    window.addEventListener('pointermove', onPointerMoveGlobal, { passive: false });
+    window.addEventListener('pointerup', onPointerUpGlobal);
+    window.addEventListener('pointercancel', onPointerCancelGlobal);
+  };
 
   const onDrawPileClick = (e) => {
     e.stopPropagation();
@@ -498,6 +587,12 @@ function App({ deck, overlay, onExit }) {
   const { creatures, others, lands } = battlefieldGroups(state.battlefield);
 
   return html`
+    <div class="playtest__rotate-gate">
+      <span class="icon">↻</span>
+      <h3>Rotate your device</h3>
+      <p>The playtester needs a bit of width to lay out the board — turn your phone sideways to keep going.</p>
+    </div>
+    <div class="playtest__main">
     <div class="playtest__topbar">
       <div class="playtest__title">${state.deckName} — Goldfish Test</div>
       <div class="playtest__controls">
@@ -525,11 +620,11 @@ function App({ deck, overlay, onExit }) {
     <div class="playtest__board">
       <div class="playtest__leftcol">
         ${state.hasCommander ? html`
-          <div class="playtest__zone playtest__zone--command" ...${zoneDropProps('command')}>
+          <div class="playtest__zone playtest__zone--command" data-dropzone="command">
             <h4>Command Zone</h4>
             <div class="playtest__cards">
               ${state.command.length
-                ? state.command.map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} />`)
+                ? state.command.map(c => html`<${CardTile} c=${c} zone="command" onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)
                 : html`<span class="playtest__empty-hint">Empty — click or drag your commander here.</span>`}
             </div>
           </div>
@@ -540,51 +635,51 @@ function App({ deck, overlay, onExit }) {
         </div>
       </div>
 
-      <div class="playtest__zone playtest__zone--battlefield" ...${zoneDropProps('battlefield')}>
+      <div class="playtest__zone playtest__zone--battlefield" data-dropzone="battlefield">
         <h4>Battlefield <span class="count">${state.battlefield.length}</span></h4>
         ${state.battlefield.length ? '' : html`<span class="playtest__empty-hint">Drag a card here to play it.</span>`}
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Creatures</span>
           <div class="playtest__cards">
-            ${withStackTightness(creatures).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onCardDragOver=${onCardDragOver('battlefield', c.uid)} onCardDragLeave=${onCardDragLeaveReorder} onCardDrop=${onCardDropReorder('battlefield', c.uid)} />`)}
+            ${withStackTightness(creatures).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)}
           </div>
         </div>
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Other</span>
           <div class="playtest__cards">
-            ${withStackTightness(others).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onCardDragOver=${onCardDragOver('battlefield', c.uid)} onCardDragLeave=${onCardDragLeaveReorder} onCardDrop=${onCardDropReorder('battlefield', c.uid)} />`)}
+            ${withStackTightness(others).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)}
           </div>
         </div>
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Lands</span>
           <div class="playtest__cards">
-            ${withStackTightness(lands).map(({ card: c, tight }) => html`<${CardTile} c=${c} tight=${tight} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onCardDragOver=${onCardDragOver('battlefield', c.uid)} onCardDragLeave=${onCardDragLeaveReorder} onCardDrop=${onCardDropReorder('battlefield', c.uid)} />`)}
+            ${withStackTightness(lands).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)}
           </div>
         </div>
       </div>
 
       <div class="playtest__sidezones">
         <div class="playtest__librarygroup">
-          <div class="playtest__pile playtest__pile--libtop" onClick=${onDrawPileClick} onDblClick=${onBrowsePile('library')} ...${zoneDropProps('library', false)} title="Top of Library — click to draw, double-click to browse, drag here to place on top">
+          <div class="playtest__pile playtest__pile--libtop" onClick=${onDrawPileClick} onDblClick=${onBrowsePile('library')} data-dropzone="library" title="Top of Library — click to draw, double-click to browse, drag here to place on top">
             <strong>${state.library.length}</strong>
             Library
           </div>
-          <div class="playtest__pile playtest__pile--libbottom" onDblClick=${onBrowsePile('library')} ...${zoneDropProps('library', true)} title="Bottom of Library — drag here to bottom-deck, double-click to browse">
+          <div class="playtest__pile playtest__pile--libbottom" onDblClick=${onBrowsePile('library')} data-dropzone="library" data-to-bottom="true" title="Bottom of Library — drag here to bottom-deck, double-click to browse">
             ↓ Bottom
           </div>
         </div>
-        <div class="playtest__pile playtest__pile--gy" onClick=${onBrowsePile('graveyard')} ...${zoneDropProps('graveyard')} title="Graveyard — click to browse, drag a card here">
+        <div class="playtest__pile playtest__pile--gy" onClick=${onBrowsePile('graveyard')} data-dropzone="graveyard" title="Graveyard — click to browse, drag a card here">
           <strong>${state.graveyard.length}</strong>
           Graveyard
         </div>
-        <div class="playtest__pile playtest__pile--exile" onClick=${onBrowsePile('exile')} ...${zoneDropProps('exile')} title="Exile — click to browse, drag a card here">
+        <div class="playtest__pile playtest__pile--exile" onClick=${onBrowsePile('exile')} data-dropzone="exile" title="Exile — click to browse, drag a card here">
           <strong>${state.exile.length}</strong>
           Exile
         </div>
       </div>
     </div>
 
-    <div class="playtest__zone playtest__zone--hand" ...${zoneDropProps('hand')}>
+    <div class="playtest__zone playtest__zone--hand" data-dropzone="hand">
       <h4>Hand <span class="count">${state.hand.length}</span>
         <span class="playtest__sort">
           Sort:
@@ -595,9 +690,10 @@ function App({ deck, overlay, onExit }) {
       </h4>
       <div class="playtest__cards playtest__cards--hand">
         ${state.hand.length
-          ? state.hand.map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onCardDragOver=${onCardDragOver('hand', c.uid)} onCardDragLeave=${onCardDragLeaveReorder} onCardDrop=${onCardDropReorder('hand', c.uid)} />`)
+          ? state.hand.map(c => html`<${CardTile} c=${c} zone="hand" onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)
           : html`<span class="playtest__empty-hint">No cards in hand.</span>`}
       </div>
+    </div>
     </div>
 
     ${browsingZone ? html`
@@ -613,7 +709,7 @@ function App({ deck, overlay, onExit }) {
                   ? deckTokens.map(t => html`<${TokenTile} t=${t} onClick=${onTokenClick(t)} />`)
                   : html`<span class="playtest__empty-hint">No tokens found for this deck.</span>`)
               : (state[browsingZone].length
-                  ? state[browsingZone].map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} />`)
+                  ? state[browsingZone].map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)
                   : html`<span class="playtest__empty-hint">Nothing here.</span>`)}
           </div>
         </div>
