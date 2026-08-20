@@ -141,7 +141,7 @@ function expand(cardList, { commander = false } = {}) {
   for (const c of cardList) {
     if (!c.data || c.data.notFound) continue;
     for (let i = 0; i < c.qty; i++) {
-      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander, tapped: false, flipped: false, isToken: false });
+      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander, tapped: false, flipped: false, isToken: false, counters: {} });
     }
   }
   return out;
@@ -156,6 +156,7 @@ function spawnToken(tokenTemplate) {
     tapped: false,
     flipped: false,
     isToken: true,
+    counters: {},
   };
 }
 
@@ -235,6 +236,9 @@ function reorderWithinZone(state, zone, draggedUid, targetUid, insertAfter) {
 // in place on the live objects. A snapshot has to clone each card, not just
 // the zone arrays — otherwise a later mutation of the same object would
 // silently "reach back" and corrupt an already-saved snapshot, breaking undo.
+// counters is nested, so it relies on adjustCounter() always replacing that
+// object wholesale (never mutating its keys in place) for this shallow copy
+// to be safe — same trick, no deep clone needed.
 function cloneCard(c) {
   return { ...c };
 }
@@ -256,11 +260,14 @@ function snapshot(state) {
 
 // ---------- Rendering (Preact) ----------
 
-function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick, tight }) {
+function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick, onCountersClick, tight }) {
   const showingBack = c.flipped && c.data.backImage;
   const smallImg = showingBack ? (c.data.backImageSmall || c.data.backImage) : (c.data.image_small || c.data.image);
   const fullImg = showingBack ? (c.data.backImage || c.data.backImageSmall) : (c.data.image || c.data.image_small);
   const displayName = showingBack ? (c.data.backName || c.name) : c.name;
+  // Counters (+1/+1, -1/-1, or anything custom) only make sense on a
+  // permanent, so only the battlefield gets the badge.
+  const counterTotal = zone === 'battlefield' ? Object.values(c.counters || {}).reduce((s, n) => s + n, 0) : 0;
   return html`
     <div class=${`playtest__card-slot${tight ? ' playtest__card-slot--tight' : ''}`} key=${c.uid}>
       <div
@@ -276,6 +283,7 @@ function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick,
       >
         <img loading="lazy" src=${smallImg} alt=${displayName} />
         ${c.data.backImage ? html`<span class="playtest__card-flip-badge" title="Flip: tap this, or right-click the card" onClick=${onFlipClick} onPointerDown=${(e) => e.stopPropagation()}>⟲</span>` : ''}
+        ${zone === 'battlefield' ? html`<span class=${`playtest__card-counter-badge${counterTotal ? '' : ' playtest__card-counter-badge--empty'}`} title="Counters" onClick=${onCountersClick} onPointerDown=${(e) => e.stopPropagation()}>${counterTotal || '+'}</span>` : ''}
       </div>
     </div>
   `;
@@ -312,6 +320,8 @@ function App({ deck, overlay, onExit }) {
   const [browsingZone, setBrowsingZoneState] = useState(null);
   const [showTips, setShowTips] = useState(false);
   const [handCollapsed, setHandCollapsed] = useState(false);
+  const [countersFor, setCountersFor] = useState(null); // uid of the battlefield card whose counters panel is open, if any
+  const [newCounterName, setNewCounterName] = useState('');
   const stateRef = useRef(state);
   stateRef.current = state;
   const undoStack = useRef([]);
@@ -389,6 +399,32 @@ function App({ deck, overlay, onExit }) {
   const onFlipBadgeClick = (uid) => (e) => {
     e.stopPropagation();
     flipCard(uid);
+  };
+
+  const onCountersClick = (uid) => (e) => {
+    e.stopPropagation();
+    setCountersFor(uid);
+  };
+
+  // counters is replaced wholesale rather than mutated in place — see the
+  // note on cloneCard for why that matters for undo.
+  const adjustCounter = (uid, type, delta) => {
+    const located = locateCard(stateRef.current, uid);
+    if (!located) return;
+    pushHistory();
+    const next = (located.card.counters?.[type] || 0) + delta;
+    const counters = { ...located.card.counters };
+    if (next <= 0) delete counters[type];
+    else counters[type] = next;
+    located.card.counters = counters;
+    commit();
+  };
+
+  const onAddCounterType = () => {
+    const type = newCounterName.trim();
+    if (!type) return;
+    adjustCounter(countersFor, type, 1);
+    setNewCounterName('');
   };
 
   const onTokenClick = (template) => (e) => {
@@ -576,7 +612,7 @@ function App({ deck, overlay, onExit }) {
       else if (e.key === 'Enter') { e.preventDefault(); setBrowsingZoneState('library'); }
       else if (key === 't') { e.preventDefault(); setShowTips(v => !v); }
       else if (e.key === 'Control' && !e.repeat) { setHandCollapsed(v => !v); }
-      else if (e.key === 'Escape') { setShowTips(false); }
+      else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); }
     };
     const onPopState = () => {
       if (!overlay.classList.contains('open')) return;
@@ -649,19 +685,19 @@ function App({ deck, overlay, onExit }) {
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Creatures</span>
           <div class="playtest__cards">
-            ${withStackTightness(creatures).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)}
+            ${withStackTightness(creatures).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} />`)}
           </div>
         </div>
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Other</span>
           <div class="playtest__cards">
-            ${withStackTightness(others).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)}
+            ${withStackTightness(others).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} />`)}
           </div>
         </div>
         <div class="playtest__battlefield-row">
           <span class="playtest__battlefield-label">Lands</span>
           <div class="playtest__cards">
-            ${withStackTightness(lands).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)}
+            ${withStackTightness(lands).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} />`)}
           </div>
         </div>
       </div>
@@ -738,6 +774,48 @@ function App({ deck, overlay, onExit }) {
         </div>
       </div>
     ` : ''}
+
+    ${countersFor ? (() => {
+      const located = locateCard(state, countersFor);
+      if (!located) return '';
+      const counters = located.card.counters || {};
+      const customTypes = Object.keys(counters).filter(t => t !== '+1/+1' && t !== '-1/-1');
+      const counterRow = (type, count) => html`
+        <li class="counter-row">
+          <span class="counter-row__label">${type}</span>
+          <span class="counter-row__stepper">
+            <button onClick=${() => adjustCounter(countersFor, type, -1)}>−</button>
+            <span class="counter-row__count">${count}</span>
+            <button onClick=${() => adjustCounter(countersFor, type, 1)}>+</button>
+          </span>
+        </li>
+      `;
+      return html`
+        <div class="zone-browser">
+          <div class="zone-browser__panel counters-panel">
+            <div class="zone-browser__header">
+              <h3>Counters — ${located.card.name}</h3>
+              <button class="btn btn--primary" onClick=${() => setCountersFor(null)}>Close</button>
+            </div>
+            <ul class="counter-list">
+              ${counterRow('+1/+1', counters['+1/+1'] || 0)}
+              ${counterRow('-1/-1', counters['-1/-1'] || 0)}
+              ${customTypes.map(t => counterRow(t, counters[t]))}
+            </ul>
+            <div class="counter-add">
+              <input
+                type="text"
+                placeholder="Custom counter (e.g. Shield, Loyalty)"
+                value=${newCounterName}
+                onInput=${(e) => setNewCounterName(e.target.value)}
+                onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); onAddCounterType(); } }}
+              />
+              <button class="btn" onClick=${onAddCounterType}>Add</button>
+            </div>
+          </div>
+        </div>
+      `;
+    })() : ''}
   `;
 }
 

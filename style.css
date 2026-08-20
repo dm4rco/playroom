@@ -632,6 +632,28 @@ html, body {
   cursor: pointer;
 }
 .playtest__card-flip-badge:hover { background: var(--accent); }
+.playtest__card-counter-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.75);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  cursor: pointer;
+}
+.playtest__card-counter-badge:hover { background: var(--accent); }
+/* No counters yet — a faint "+" so the badge is discoverable without
+   competing with the card art for attention. */
+.playtest__card-counter-badge--empty { opacity: 0.45; font-weight: 400; }
 .playtest__zone--hand {
   position: sticky;
   bottom: 0;
@@ -754,6 +776,44 @@ html, body {
 .tips-list__action { color: var(--text); }
 .tips-list__control { color: var(--text-dim); font-size: 13px; text-align: right; white-space: nowrap; }
 
+.counters-panel { max-width: 420px; }
+.counter-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.counter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.counter-row:last-child { border-bottom: none; }
+.counter-row__label { color: var(--text); font-size: 14px; }
+.counter-row__stepper { display: flex; align-items: center; gap: 10px; }
+.counter-row__stepper button {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}
+.counter-row__stepper button:hover { border-color: var(--accent); }
+.counter-row__count { min-width: 1.5em; text-align: center; font-weight: 700; }
+.counter-add { display: flex; gap: 8px; margin-top: 14px; }
+.counter-add input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
 /* Rotate-device gate: the row-based board (Command Zone/Battlefield/side
    piles side by side) needs width more than height, so on a narrow phone in
    portrait there's nowhere to put it — ask for a turn instead of squeezing
@@ -815,6 +875,7 @@ html, body {
   /* Bigger tap target for the flip badge — 18px is fine for a mouse
      pointer but too small to reliably hit with a finger. */
   .playtest__card-flip-badge { width: 24px; height: 24px; font-size: 13px; top: 2px; right: 2px; }
+  .playtest__card-counter-badge { min-width: 22px; height: 22px; font-size: 12px; bottom: 2px; left: 2px; }
 }
 
 /* Mobile site chrome — the sidebar becomes an off-canvas drawer (opened via

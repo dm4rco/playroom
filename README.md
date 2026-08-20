@@ -93,9 +93,16 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     their token list.
   - Closing the Library browser (or switching to browse a different zone)
     always reshuffles it, since you just searched it.
+  - Every battlefield card has a small counter badge (bottom-left corner) —
+    click it for +1/+1 and -1/-1 steppers plus a free-text field for
+    anything else (Shield, Loyalty, Experience, whatever the card grants).
+    The badge itself shows the running total once it's non-zero.
+  - Advancing the turn (the + button, D, or →) untaps the whole battlefield
+    automatically, like the untap step in paper Magic.
 - Opening hand is just a draw of 10, full stop — there's no forced mulligan
   step. It's single-player testing, so do whatever you want with them (play
   them, bottom some via drag, whatever). Both "New Game" and "Mulligan"
-  reshuffle the whole deck and redraw 10.
+  reshuffle the whole deck, redraw 10, and sort the new hand by CMC (the
+  sort buttons still work as normal from there).
 - It's solitaire testing only — no rules enforcement, mana, or opponent.
   Drag-and-drop uses the native HTML5 API, so it's mouse-only (no touch).
