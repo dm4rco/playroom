@@ -100,10 +100,17 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     Decks imported before this feature need a "Refresh Card Data" to pick up
     their token list.
   - Drag any card onto any zone to place it exactly where you want,
-    including dragging onto the Library's Top or Bottom strip.
-  - Space bar draws a card. Arrow keys: ←/→ adjust turn, ↑/↓ adjust life.
-    The browser's Back button undoes the last action, same as the
-    on-screen Undo button.
+    including dragging onto the Library's Top or Bottom strip. Within the
+    Hand or Battlefield, drop a card onto another card there to reorder —
+    drops left/right of its midpoint insert before/after it (a thin accent
+    bar shows where it'll land).
+  - Right-click a double-faced card (transform/modal DFC, e.g. Aang, Master
+    of Elements) to flip it to its other face — a small ⟲ badge marks cards
+    that can flip. Single-faced cards ignore right-click.
+  - Space bar draws a card. Enter opens the Library browser (same as
+    double-clicking the pile). Arrow keys or WASD: ←/→ or A/D adjust turn,
+    ↑/↓ or W/S adjust life. The browser's Back button undoes the last
+    action, same as the on-screen Undo button.
 - Opening hand is just a draw of 10, full stop — there's no forced mulligan
   step. It's single-player testing, so do whatever you want with them (play
   them, bottom some via drag, whatever). Both "New Game" and "Mulligan"

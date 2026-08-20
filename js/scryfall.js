@@ -12,6 +12,11 @@ function saveCache(key, cache) {
 
 function simplifyCard(card) {
   const face = card.card_faces?.[0];
+  const backFace = card.card_faces?.[1];
+  // Transform/modal-DFC cards render as two separate physical images; layouts
+  // like split/adventure/aftermath still have card_faces but only one actual
+  // image (top-level image_uris), so they're not flippable.
+  const hasSeparateBack = !card.image_uris && !!backFace?.image_uris;
   return {
     name: card.name,
     mana_cost: card.mana_cost || face?.mana_cost || '',
@@ -19,9 +24,13 @@ function simplifyCard(card) {
     type_line: card.type_line || face?.type_line || '',
     colors: card.colors || face?.colors || [],
     color_identity: card.color_identity || [],
-    image: card.image_uris?.normal || face?.image_uris?.normal
-      || card.card_faces?.[1]?.image_uris?.normal || '',
+    image: card.image_uris?.normal || face?.image_uris?.normal || '',
     image_small: card.image_uris?.small || face?.image_uris?.small || '',
+    // Back face image/name, for flipping double-faced cards in the
+    // playtester. null for single-faced cards and non-flippable layouts.
+    backImage: hasSeparateBack ? backFace.image_uris.normal : null,
+    backImageSmall: hasSeparateBack ? backFace.image_uris.small : null,
+    backName: hasSeparateBack ? backFace.name : null,
     // Cardmarket (EUR) pricing, as supplied by Scryfall. There's no eur_etched field,
     // so etched cards fall back to the foil price.
     price_eur: card.prices?.eur ?? null,
