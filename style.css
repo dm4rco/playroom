@@ -403,12 +403,20 @@ html, body {
   gap: 6px;
 }
 .playtest__zone h4 .count { font-weight: 400; }
-.playtest__leftcol { flex: 0 0 160px; display: flex; flex-direction: column; gap: 14px; }
+/* Wide enough that a single commander (by far the common case) doesn't need
+   to scroll — a second, overlapping commander only scrolls a little. */
+.playtest__leftcol { flex: 0 0 190px; display: flex; flex-direction: column; gap: 14px; }
 .playtest__zone--battlefield,
 .playtest__zone--hand,
 .playtest__zone--command {
   transition: background-color 0.1s ease, border-color 0.1s ease;
 }
+/* .playtest__zone's flex:1 is meant for battlefield/hand as row siblings —
+   inside the column-direction leftcol, it was instead making the Command
+   Zone greedily grow to fill all of leftcol's stretched height, shoving the
+   Tokens pile down toward the bottom of the board. Size to content instead. */
+.playtest__zone--command { flex: 0 0 auto; }
+.playtest__zone--command .playtest__cards { min-height: 182px; }
 .playtest__zone--battlefield {
   background: var(--bg-alt);
   border: 1px solid var(--border);
@@ -466,29 +474,34 @@ html, body {
   align-items: center;
   justify-content: center;
 }
-/* Battlefield slots reserve a square footprint big enough for a tapped
-   (rotated) card, so tapping/untapping never reflows neighboring cards. */
-.playtest__zone--battlefield .playtest__card-slot { width: 182px; height: 182px; }
+/* Battlefield/Command slots reserve a square footprint big enough for a
+   tapped (rotated) card, so tapping/untapping never reflows neighbors. */
+.playtest__zone--battlefield .playtest__card-slot,
+.playtest__zone--command .playtest__card-slot { width: 182px; height: 182px; }
 
-/* Battlefield rows overlap cards (like a fanned stack) instead of wrapping,
-   so having a dozen Treasure tokens or several basic lands in play doesn't
-   blow the row out to an unusable width. Scrolls horizontally if it still
-   doesn't fit. Hovering a card brings it to the front so it's fully visible. */
-.playtest__zone--battlefield .playtest__cards {
+/* Battlefield rows (and the Command Zone, which almost always holds just 1-2
+   cards) overlap cards like a fanned stack instead of wrapping to a new row
+   — a second commander shouldn't double the box's height. Scrolls
+   horizontally if it still doesn't fit. Hovering brings a card to the front. */
+.playtest__zone--battlefield .playtest__cards,
+.playtest__zone--command .playtest__cards {
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 10px;
 }
-.playtest__zone--battlefield .playtest__card-slot {
+.playtest__zone--battlefield .playtest__card-slot,
+.playtest__zone--command .playtest__card-slot {
   margin-left: -95px;
   position: relative;
 }
-.playtest__zone--battlefield .playtest__card-slot:first-child { margin-left: 0; }
+.playtest__zone--battlefield .playtest__card-slot:first-child,
+.playtest__zone--command .playtest__card-slot:first-child { margin-left: 0; }
 /* A copy of the same card right before it — no need to see it clearly,
    just that it's there, so overlap much tighter than usual. */
 .playtest__zone--battlefield .playtest__card-slot--tight { margin-left: -160px; }
-.playtest__zone--battlefield .playtest__card-slot:hover { z-index: 5; }
+.playtest__zone--battlefield .playtest__card-slot:hover,
+.playtest__zone--command .playtest__card-slot:hover { z-index: 5; }
 .playtest__card {
   position: relative;
   width: 130px;
@@ -619,3 +632,18 @@ html, body {
   gap: 8px;
 }
 .zone-browser__header .count { color: var(--text-dim); font-size: 14px; font-weight: 400; }
+
+.tips-panel { max-width: 480px; }
+.tips-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.tips-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.tips-list li:last-child { border-bottom: none; }
+.tips-list__action { color: var(--text); }
+.tips-list__control { color: var(--text-dim); font-size: 13px; text-align: right; white-space: nowrap; }

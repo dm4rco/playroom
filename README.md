@@ -66,51 +66,29 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   target) even after the commander is cast, so you can drag or click it
   back. Rendered with Preact+htm loaded from a CDN as ES modules (no build
   step, no npm — still just static files pushed to GitHub Pages).
-  - Hover any card, anywhere, to see it full-size in a floating preview next
-    to your cursor — no clicking required. Click a hand card to play it,
-    click a battlefield card to tap/untap it (rotates 90°, and battlefield
-    slots always reserve room for the rotation so nothing jumps around),
-    click your commander in the Command Zone to cast it.
-  - The Hand caps at ~2 rows and scrolls internally beyond that, so drawing a
-    lot of cards doesn't push the rest of the board out of reach. Sort
-    buttons (CMC / Type / Name) in the Hand header reorder it on demand.
-  - The battlefield is split into Creatures / Other / Lands rows so permanents
-    are easy to scan; drop a card anywhere in the battlefield area and it
-    lands in the right row automatically. Cards within a row overlap in a
-    fan (rather than wrapping) and scroll horizontally, so a dozen Treasure
-    tokens or a handful of basics don't blow the row out — consecutive
-    copies of the *same* card overlap much tighter than usual (you don't
-    need to see all 10 Mountains clearly, just that they're there). Hover a
-    card to bring it fully to the front (and see the full-size preview).
-  - Click the Library pile to draw, or double-click it (or the Bottom strip)
-    to browse every card in it — for tutors (Library is the one zone that
-    still uses double-click, since single-click there already means draw).
-    Click the Graveyard, Exile, or Tokens pile once to browse it — for
-    recursion or making tokens. Click a card in that view to play it to the
-    battlefield (it stays open so you can grab more than one). Closing the
-    Library browser (or switching to browse a different zone) always
-    reshuffles it, since you just searched it.
-  - The Tokens pile (below the Command Zone) lists every token your deck can
-    actually create (auto-detected from Scryfall's data on each card,
-    including its real type — creature, artifact, land, whatever). It's an
-    unlimited supply: click a token to spawn a fresh copy onto the
-    battlefield — the token stays in the list so you can make more. Spawned
-    tokens go away for good once they leave the battlefield (graveyard/
-    exile/etc.), same as in paper Magic, since a token isn't a real card.
-    Decks imported before this feature need a "Refresh Card Data" to pick up
+  - Press **T** in the playtester for the full list of controls (hover to
+    preview, click to play/tap/cast/draw, right-click to flip a double-faced
+    card, drag to move or reorder, arrow keys/WASD, Space, Enter, etc).
+  - Hovering a hand card previews it without moving it; clicking it plays it.
+    Battlefield slots always reserve room for a tapped (rotated) card so
+    nothing jumps around, and the Command Zone/battlefield rows fan
+    overlapping cards instead of wrapping — handy since 90%+ of decks only
+    ever have one or two commanders, and a battlefield can easily have a
+    dozen Treasure tokens (which overlap tighter than usual, since you don't
+    need to see 10 identical tokens clearly).
+  - The Hand caps at ~2 rows and scrolls internally, so drawing a lot of
+    cards doesn't push the rest of the board out of reach. Sort buttons
+    (CMC / Type / Name) reorder it on demand, or drag cards to reorder
+    manually.
+  - The Tokens pile lists every token your deck can actually create
+    (auto-detected from Scryfall's data on each card, including its real
+    type). It's an unlimited supply — spawning one doesn't remove it from
+    the list — and spawned tokens go away for good once they leave the
+    battlefield, same as in paper Magic, since they aren't real cards. Decks
+    imported before this feature need a "Refresh Card Data" to pick up
     their token list.
-  - Drag any card onto any zone to place it exactly where you want,
-    including dragging onto the Library's Top or Bottom strip. Within the
-    Hand or Battlefield, drop a card onto another card there to reorder —
-    drops left/right of its midpoint insert before/after it (a thin accent
-    bar shows where it'll land).
-  - Right-click a double-faced card (transform/modal DFC, e.g. Aang, Master
-    of Elements) to flip it to its other face — a small ⟲ badge marks cards
-    that can flip. Single-faced cards ignore right-click.
-  - Space bar draws a card. Enter opens the Library browser (same as
-    double-clicking the pile). Arrow keys or WASD: ←/→ or A/D adjust turn,
-    ↑/↓ or W/S adjust life. The browser's Back button undoes the last
-    action, same as the on-screen Undo button.
+  - Closing the Library browser (or switching to browse a different zone)
+    always reshuffles it, since you just searched it.
 - Opening hand is just a draw of 10, full stop — there's no forced mulligan
   step. It's single-player testing, so do whatever you want with them (play
   them, bottom some via drag, whatever). Both "New Game" and "Mulligan"

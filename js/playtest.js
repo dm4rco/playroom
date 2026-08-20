@@ -61,6 +61,23 @@ const BROWSABLE_ZONES = { library: 'Library', graveyard: 'Graveyard', exile: 'Ex
 const DRAW_PILE_KEY = '__draw-pile__';
 const HAND_SORT_TYPE_ORDER = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'];
 
+const TIPS = [
+  { action: 'View a card full-size', control: 'Hover it' },
+  { action: 'Flip a double-faced card', control: 'Right-click' },
+  { action: 'Play a hand card', control: 'Click it' },
+  { action: 'Tap / untap a battlefield card', control: 'Click it' },
+  { action: 'Cast your commander', control: 'Click it in the Command Zone' },
+  { action: 'Draw a card', control: 'Click the Library, or Space' },
+  { action: 'Browse the Library (tutor effects)', control: 'Double-click the Library, or Enter' },
+  { action: 'Browse Graveyard / Exile / Tokens', control: 'Click the pile' },
+  { action: 'Move a card to any zone', control: 'Drag it there' },
+  { action: 'Reorder Hand / Battlefield', control: 'Drag a card onto another' },
+  { action: 'Adjust turn', control: '← → or A D' },
+  { action: 'Adjust life', control: '↑ ↓ or W S' },
+  { action: 'Undo', control: 'Undo button, or browser Back' },
+  { action: 'Toggle this panel', control: 'T' },
+];
+
 // ---------- Pure game logic (unchanged from playtest.js) ----------
 
 function shuffle(arr) {
@@ -278,6 +295,7 @@ function TokenTile({ t, onClick }) {
 function App({ deck, overlay, onExit }) {
   const [state, setState] = useState(() => resetGame(deck));
   const [browsingZone, setBrowsingZoneState] = useState(null);
+  const [showTips, setShowTips] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
   const undoStack = useRef([]);
@@ -460,6 +478,8 @@ function App({ deck, overlay, onExit }) {
       else if (e.key === 'ArrowDown' || key === 's') { e.preventDefault(); pushHistory(); stateRef.current.life--; commit(); }
       else if (e.code === 'Space') { e.preventDefault(); pushHistory(); drawN(stateRef.current, 1); commit(); }
       else if (e.key === 'Enter') { e.preventDefault(); setBrowsingZoneState('library'); }
+      else if (key === 't') { e.preventDefault(); setShowTips(v => !v); }
+      else if (e.key === 'Escape') { setShowTips(false); }
     };
     const onPopState = () => {
       if (!overlay.classList.contains('open')) return;
@@ -500,7 +520,7 @@ function App({ deck, overlay, onExit }) {
       </div>
     </div>
 
-    <div class="playtest__hint">Hover any card to see it full-size. Right-click a double-faced card to flip it. Hand: click to play. Battlefield: click to tap/untap. Command Zone: click a card to play it. Library: click to draw, double-click (or Enter) to browse. Graveyard / Exile / Tokens: click to browse. Drag any card to any zone — drop it on another card in Hand or Battlefield to reorder. Space: draw a card. Arrow keys or WASD: turn (←→/AD), life (↑↓/WS). Browser Back: undo.</div>
+    <div class="playtest__hint">Press <strong>T</strong> for controls & tips.</div>
 
     <div class="playtest__board">
       <div class="playtest__leftcol">
@@ -596,6 +616,20 @@ function App({ deck, overlay, onExit }) {
                   ? state[browsingZone].map(c => html`<${CardTile} c=${c} onClick=${onCardClick(c.uid)} onDragStart=${onDragStart(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} />`)
                   : html`<span class="playtest__empty-hint">Nothing here.</span>`)}
           </div>
+        </div>
+      </div>
+    ` : ''}
+
+    ${showTips ? html`
+      <div class="zone-browser">
+        <div class="zone-browser__panel tips-panel">
+          <div class="zone-browser__header">
+            <h3>Controls & Tips</h3>
+            <button class="btn btn--primary" onClick=${() => setShowTips(false)}>Close</button>
+          </div>
+          <ul class="tips-list">
+            ${TIPS.map(t => html`<li><span class="tips-list__action">${t.action}</span><span class="tips-list__control">${t.control}</span></li>`)}
+          </ul>
         </div>
       </div>
     ` : ''}
