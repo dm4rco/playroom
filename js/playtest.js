@@ -185,6 +185,7 @@ function drawN(state, n) {
 function resetGame(deck) {
   const state = freshState(deck);
   drawN(state, OPENING_HAND_SIZE);
+  sortHand(state.hand, 'cmc'); // a reasonable default for a fresh opening hand — sort buttons re-sort it however from here
   return state;
 }
 
