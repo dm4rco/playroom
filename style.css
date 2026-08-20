@@ -351,8 +351,13 @@ html, body {
 .card-hover-preview.open { display: block; }
 .card-hover-preview img {
   display: block;
-  width: 280px;
+  width: auto;
   height: auto;
+  /* Capped by viewport, not just a fixed 280px — on a short landscape
+     phone a fixed-width preview can be taller than the whole screen,
+     so only half of it ever shows. */
+  max-width: min(280px, 62vw);
+  max-height: 80vh;
   border-radius: 14px;
   border: 1px solid var(--border);
 }
@@ -517,7 +522,7 @@ html, body {
 .playtest__pile:hover { border-color: var(--accent); color: var(--text); }
 .playtest__pile--libbottom {
   aspect-ratio: auto;
-  height: 32px;
+  height: 48px;
   font-size: 12px;
   cursor: default;
 }
@@ -777,7 +782,7 @@ html, body {
   .playtest__battlefield-row { margin-bottom: 5px; }
   .playtest__battlefield-label { font-size: 9px; margin-bottom: 3px; }
   .playtest__pile--tokens { height: 44px; }
-  .playtest__pile--libbottom { height: 20px; font-size: 9px; }
+  .playtest__pile--libbottom { height: 34px; font-size: 9px; }
   .playtest__pile strong { font-size: 16px; }
   .playtest__pile { font-size: 11px; gap: 2px; }
   .playtest__cards { gap: 5px; }

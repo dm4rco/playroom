@@ -82,7 +82,7 @@ const BROWSABLE_ZONES = { library: 'Library', graveyard: 'Graveyard', exile: 'Ex
 const DRAW_PILE_KEY = '__draw-pile__';
 const HAND_SORT_TYPE_ORDER = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'];
 const DRAG_THRESHOLD = 6; // px of pointer movement before a press becomes a drag, not a click
-const LONG_PRESS_DELAY = 450; // ms — touch has no right-click, so a held press flips a double-faced card instead
+const LONG_PRESS_DELAY = 550; // ms — touch has no hover, so a held (but still) press peeks a full-size preview instead
 
 const TIPS = [
   { action: 'View a card full-size', control: 'Hover it, or long-press on touch' },
@@ -279,7 +279,7 @@ function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick,
         onMouseLeave=${() => hideCardPreview()}
       >
         <img loading="lazy" src=${smallImg} alt=${displayName} />
-        ${c.data.backImage ? html`<span class="playtest__card-flip-badge" title="Flip: tap this, or right-click the card" onClick=${onFlipClick}>⟲</span>` : ''}
+        ${c.data.backImage ? html`<span class="playtest__card-flip-badge" title="Flip: tap this, or right-click the card" onClick=${onFlipClick} onPointerDown=${(e) => e.stopPropagation()}>⟲</span>` : ''}
       </div>
     </div>
   `;
