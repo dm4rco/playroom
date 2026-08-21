@@ -64,6 +64,11 @@ function ensureGhostEl() {
     el.id = 'card-drag-ghost';
     el.className = 'card-drag-ghost';
     el.appendChild(document.createElement('img'));
+    // Shown only when dragging a multi-selected group — the count of other
+    // cards coming along for the ride, so it's clear it's not just the one.
+    const count = document.createElement('span');
+    count.className = 'card-drag-ghost__count';
+    el.appendChild(count);
     document.body.appendChild(el);
   }
   return el;
@@ -119,6 +124,7 @@ const TIPS = [
   { action: 'Collapse/expand Command Zone', control: 'C' },
   { action: 'Fullscreen Battlefield (hide everything else)', control: 'B' },
   { action: 'Mulligan', control: 'M' },
+  { action: 'Send selected cards to Graveyard', control: 'Delete' },
   { action: 'Toggle this panel', control: 'T' },
   { action: 'Undo', control: 'Browser Back' },
   { action: 'Flip a double-faced card', control: 'Right-click' },
@@ -361,6 +367,11 @@ function App({ deck, overlay, onExit }) {
   const [selectedUids, setSelectedUids] = useState(() => new Set()); // battlefield multi-select, via marquee drag on empty canvas
   const stateRef = useRef(state);
   stateRef.current = state;
+  // Mirrors selectedUids for the keydown effect below, which is registered
+  // once (empty deps, so it never re-subscribes and re-pushes browser
+  // history) and would otherwise only ever see the selection from mount.
+  const selectedUidsRef = useRef(selectedUids);
+  selectedUidsRef.current = selectedUids;
   const undoStack = useRef([]);
   const pendingClick = useRef(null); // { id, uid } — only used to debounce the Library pile's click-to-draw vs. double-click-to-browse
   const dragRef = useRef(null); // { uid, fromZone, startX, startY, dragging, previewImg, lastTarget, lastX, lastY, longPressTimer, longPressFired } — the in-flight pointer drag, if any
@@ -510,6 +521,20 @@ function App({ deck, overlay, onExit }) {
     commit();
   };
 
+  // Delete key with cards selected — the highlighted battlefield cards die
+  // to the Graveyard together, same target zone dragging them there would use.
+  const sendSelectedToGraveyard = () => {
+    const uids = selectedUidsRef.current;
+    if (!uids.size) return;
+    pushHistory();
+    uids.forEach(u => {
+      const found = locateCard(stateRef.current, u);
+      if (found?.zone === 'battlefield') moveCard(stateRef.current, u, 'graveyard');
+    });
+    setSelectedUids(new Set());
+    commit();
+  };
+
   const onTokenClick = (template) => (e) => {
     e.stopPropagation();
     pushHistory();
@@ -576,6 +601,13 @@ function App({ deck, overlay, onExit }) {
       hideCardPreview();
       const ghost = ensureGhostEl();
       ghost.querySelector('img').src = drag.previewImg;
+      const countEl = ghost.querySelector('.card-drag-ghost__count');
+      if (drag.groupUids?.length > 1) {
+        countEl.textContent = `+${drag.groupUids.length - 1}`;
+        countEl.classList.add('open');
+      } else {
+        countEl.classList.remove('open');
+      }
       ghost.classList.add('open');
     }
     e.preventDefault(); // stop touch-scroll once an actual drag is underway
@@ -589,16 +621,21 @@ function App({ deck, overlay, onExit }) {
     drag.lastY = e.clientY;
   };
 
-  // xPct/yPct clamped so a dropped card's center always stays far enough
-  // inside the canvas that the card itself (positioned by its center, half
-  // its own size in every direction) never pokes out past the edge —
-  // margin is derived from the actual card size in play, so this stays
-  // correct whether it's the desktop or landscape-mobile card size.
-  const battlefieldDropPosition = (target, x, y) => {
+  // Margin (as a % of the canvas) a card's center has to stay clear of the
+  // edge so the card itself — positioned by its center, half its own size
+  // in every direction — never pokes out past the canvas. Derived from the
+  // actual card size in play, so it's correct at any card scale/breakpoint.
+  // Shared by the single-card drop below and the group-drag reposition in
+  // onPointerUpGlobal, which clamps every card in the group the same way.
+  const canvasMargins = (target) => {
     const rect = target.el.getBoundingClientRect();
     const cardHalf = (parseFloat(getComputedStyle(target.el).getPropertyValue('--card-bf')) || 182) / 2;
-    const marginXPct = Math.min(45, (cardHalf / rect.width) * 100);
-    const marginYPct = Math.min(45, (cardHalf / rect.height) * 100);
+    return { marginXPct: Math.min(45, (cardHalf / rect.width) * 100), marginYPct: Math.min(45, (cardHalf / rect.height) * 100) };
+  };
+
+  const battlefieldDropPosition = (target, x, y) => {
+    const rect = target.el.getBoundingClientRect();
+    const { marginXPct, marginYPct } = canvasMargins(target);
     const xPct = Math.min(100 - marginXPct, Math.max(marginXPct, ((x - rect.left) / rect.width) * 100));
     const yPct = Math.min(100 - marginYPct, Math.max(marginYPct, ((y - rect.top) / rect.height) * 100));
     return { x: xPct, y: yPct };
@@ -626,6 +663,19 @@ function App({ deck, overlay, onExit }) {
           card.x = pos.x;
           card.y = pos.y;
           stateRef.current.battlefield.push(card);
+          // The rest of the selected group rides along, each keeping its
+          // offset from the card that was actually grabbed.
+          if (drag.groupOffsets) {
+            const { marginXPct, marginYPct } = canvasMargins(target);
+            drag.groupOffsets.forEach((off, u) => {
+              const gidx = stateRef.current.battlefield.findIndex(c => c.uid === u);
+              if (gidx === -1) return;
+              const [gcard] = stateRef.current.battlefield.splice(gidx, 1);
+              gcard.x = Math.min(100 - marginXPct, Math.max(marginXPct, pos.x + off.dx));
+              gcard.y = Math.min(100 - marginYPct, Math.max(marginYPct, pos.y + off.dy));
+              stateRef.current.battlefield.push(gcard);
+            });
+          }
         } else {
           moveCard(stateRef.current, drag.uid, 'battlefield', pos);
         }
@@ -633,6 +683,14 @@ function App({ deck, overlay, onExit }) {
       } else if (target?.kind === 'zone' && target.zoneName !== drag.fromZone) {
         pushHistory();
         moveCard(stateRef.current, drag.uid, target.zoneName, { toBottom: target.toBottom });
+        if (drag.groupUids) {
+          drag.groupUids.forEach(u => {
+            if (u === drag.uid) return;
+            const found = locateCard(stateRef.current, u);
+            if (found?.zone === drag.fromZone) moveCard(stateRef.current, u, target.zoneName, { toBottom: target.toBottom });
+          });
+          setSelectedUids(new Set());
+        }
         commit();
       }
     }
@@ -657,7 +715,22 @@ function App({ deck, overlay, onExit }) {
     const drag = {
       uid, fromZone: located.zone, startX: e.clientX, startY: e.clientY,
       dragging: false, previewImg, lastTarget: null, longPressTimer: null, longPressFired: false,
+      groupUids: null, groupOffsets: null,
     };
+    // Grabbing a card that's part of the current multi-selection drags the
+    // whole group together — everyone else's position is stored relative to
+    // this card's, so the group keeps its shape wherever it lands.
+    if (located.zone === 'battlefield' && selectedUids.size > 1 && selectedUids.has(uid)) {
+      drag.groupUids = Array.from(selectedUids);
+      drag.groupOffsets = new Map();
+      drag.groupUids.forEach(u => {
+        if (u === uid) return;
+        const found = locateCard(stateRef.current, u);
+        if (found?.zone === 'battlefield') {
+          drag.groupOffsets.set(u, { dx: (found.card.x ?? 50) - (located.card.x ?? 50), dy: (found.card.y ?? 50) - (located.card.y ?? 50) });
+        }
+      });
+    }
     dragRef.current = drag;
     // Touch has no hover, so a held (but still) press peeks the full-size
     // preview instead — released on pointerup, cancelled if it turns into
@@ -798,6 +871,7 @@ function App({ deck, overlay, onExit }) {
       else if (key === 'c') { setLeftColCollapsed(v => !v); }
       else if (key === 'b') { setBattlefieldFullscreen(v => !v); }
       else if (key === 'm') { setState(resetGame(deck)); }
+      else if (e.key === 'Delete') { e.preventDefault(); sendSelectedToGraveyard(); }
       else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); setSelectedUids(new Set()); setBattlefieldFullscreen(false); }
     };
     const onPopState = () => {

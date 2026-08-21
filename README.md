@@ -85,8 +85,12 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     instead of wrapping, since 90%+ of decks only ever have one or two
     commanders.
   - Marquee-select a group of battlefield cards by dragging on empty canvas
-    space, then click any one of them to tap/untap the whole group together.
-    Click empty space or press Escape to clear the selection.
+    space, then click any one of them to tap/untap the whole group together,
+    or drag any one of them to move the whole group at once (keeping their
+    relative positions, or all landing in the same zone if you drag them
+    onto Graveyard/Exile/Hand/etc). **Delete** sends the selected cards
+    straight to the Graveyard without needing to drag them there. Click
+    empty space or press Escape to clear the selection.
   - Every battlefield card has a duplicate badge (top-left corner) for
     quickly making a second copy of it — untapped, no counters, offset
     slightly so it doesn't sit exactly on top of the original.

@@ -382,6 +382,26 @@ html, body {
   border: 2px solid var(--accent);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
 }
+/* "+N" badge on the ghost while dragging a multi-selected group, so it
+   reads as "moving several cards" and not just the one under the cursor. */
+.card-drag-ghost__count {
+  display: none;
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.card-drag-ghost__count.open { display: flex; }
 
 /* Playtest launcher button */
 .playtest-btn {
