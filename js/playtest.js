@@ -116,7 +116,6 @@ const TIPS = [
   { action: 'Adjust life', control: '↑ ↓ or W S' },
   { action: 'Draw a card', control: 'Space' },
   { action: 'Browse the Library (tutor effects)', control: 'Enter' },
-  { action: 'Collapse/expand Hand & piles', control: 'Control' },
   { action: 'Collapse/expand Command Zone', control: 'C' },
   { action: 'Fullscreen Battlefield (hide everything else)', control: 'B' },
   { action: 'Mulligan', control: 'M' },
@@ -349,7 +348,7 @@ function App({ deck, overlay, onExit }) {
   const [state, setState] = useState(() => resetGame(deck));
   const [browsingZone, setBrowsingZoneState] = useState(null);
   const [showTips, setShowTips] = useState(false);
-  const [handCollapsed, setHandCollapsed] = useState(false); // collapses the whole bottom row: Hand, Library, Graveyard, Exile
+  const [bottomRowPinned, setBottomRowPinned] = useState(false); // pins Hand/Library/Graveyard/Exile open — otherwise they peek and expand on hover/drag
   const [leftColCollapsed, setLeftColCollapsed] = useState(true); // collapses Command Zone + Tokens — starts collapsed, Battlefield matters more
   const [topbarCollapsed, setTopbarCollapsed] = useState(true); // collapses the secondary controls row + hint (Turn/Life/Exit stay put) — starts collapsed
   const [battlefieldFullscreen, setBattlefieldFullscreen] = useState(false); // B — everything but the Battlefield disappears
@@ -796,7 +795,6 @@ function App({ deck, overlay, onExit }) {
       else if (e.code === 'Space') { e.preventDefault(); pushHistory(); drawN(stateRef.current, 1); commit(); }
       else if (e.key === 'Enter') { e.preventDefault(); setBrowsingZoneState('library'); }
       else if (key === 't') { e.preventDefault(); setShowTips(v => !v); }
-      else if (e.key === 'Control' && !e.repeat) { setHandCollapsed(v => !v); }
       else if (key === 'c') { setLeftColCollapsed(v => !v); }
       else if (key === 'b') { setBattlefieldFullscreen(v => !v); }
       else if (key === 'm') { setState(resetGame(deck)); }
@@ -891,7 +889,7 @@ function App({ deck, overlay, onExit }) {
       </div>
     </div>
 
-    <div class=${`playtest__bottomrow${handCollapsed ? ' bottomrow-collapsed' : ''}`}>
+    <div class=${`playtest__bottomrow${bottomRowPinned ? ' bottomrow-pinned' : ''}`}>
       <div class="playtest__zone playtest__zone--hand" data-dropzone="hand">
         <h4>Hand <span class="count">${state.hand.length}</span>
           <span class="playtest__sort">
@@ -900,7 +898,7 @@ function App({ deck, overlay, onExit }) {
             <button onClick=${onSortHand('type')}>Type</button>
             <button onClick=${onSortHand('name')}>Name</button>
           </span>
-          <button class="playtest__hand-toggle" title="Collapse/expand Hand, Library, Graveyard & Exile (Control)" onClick=${() => setHandCollapsed(v => !v)}>${handCollapsed ? '▲' : '▼'}</button>
+          <button class="playtest__hand-toggle" title=${bottomRowPinned ? 'Unpin Hand, Library, Graveyard & Exile (auto-hide again when the cursor leaves)' : 'Pin Hand, Library, Graveyard & Exile open (otherwise they peek and expand on hover, or while dragging a card toward them)'} onClick=${() => setBottomRowPinned(v => !v)}>${bottomRowPinned ? '▣' : '▢'}</button>
         </h4>
         <div class="playtest__cards playtest__cards--hand">
           ${state.hand.length

@@ -369,7 +369,7 @@ html, body {
   position: fixed;
   z-index: 320;
   pointer-events: none;
-  transform: translate(-50%, -120%);
+  transform: translate(-50%, -50%);
   opacity: 0.9;
 }
 .card-drag-ghost.open { display: block; }
@@ -773,18 +773,33 @@ html, body {
 .playtest__card.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Hand + the piles beside it are the one part of the board that stays
-   pinned to the bottom of the scrollable overlay. */
+   pinned to the bottom of the scrollable overlay. They also default to a
+   "peek" — just enough to show the section is there — and expand on their
+   own once the cursor is actually over them, same as it naturally is while
+   dragging a card toward the Graveyard/Exile/Library. That reclaims space
+   for the Battlefield without needing a manual collapse step, so there's no
+   toggle-fatigue during a game. Not sticky: the free-canvas Battlefield has
+   a bounded, predictable height (unlike the old row layout, which could
+   grow with content), so there's no more tall/scrolling board for this to
+   stay pinned above — and a sticky box here risked visually overlapping a
+   full battlefield above it, which also confused drag-and-drop's
+   elementFromPoint hit test into resolving drops as hitting
+   Graveyard/Exile instead of the battlefield underneath them. */
 .playtest__bottomrow {
-  /* Not sticky: the free-canvas Battlefield has a bounded, predictable
-     height (unlike the old row layout, which could grow with content), so
-     there's no more tall/scrolling board for this to stay pinned above —
-     and a sticky box here risked visually overlapping a full battlefield
-     above it, which also confused drag-and-drop's elementFromPoint hit
-     test into resolving drops as hitting Graveyard/Exile instead of the
-     battlefield underneath them. */
   background: var(--bg);
   padding-top: 14px;
   border-top: 1px solid var(--border);
+  overflow: hidden;
+  max-height: 110px;
+  /* Collapsing waits a beat (so briefly dipping the cursor out doesn't
+     cause flicker); expanding is instant. */
+  transition: max-height 0.2s ease 0.35s;
+}
+.playtest__bottomrow:hover,
+.playtest__bottomrow:focus-within,
+.playtest__bottomrow.bottomrow-pinned {
+  max-height: 460px;
+  transition: max-height 0.15s ease;
 }
 /* Cap the hand at ~2 rows and scroll internally instead of growing the
    whole zone taller — otherwise drawing a lot of cards pushes the rest of
@@ -794,19 +809,7 @@ html, body {
   overflow-y: auto;
   padding-right: 4px;
   padding-bottom: 4px;
-  transition: max-height 0.2s ease;
 }
-/* Collapsed bottom row — cards stay in the DOM (nothing is discarded), just
-   folded away to reclaim vertical space, most useful on a short mobile
-   viewport. Toggled via the ▼ button or the Control key. Hand folds its
-   cards; the piles beside it just disappear entirely (they don't need a
-   "folded" state, a summary tile is already compact). */
-.playtest__bottomrow.bottomrow-collapsed .playtest__cards--hand {
-  max-height: 0;
-  overflow: hidden;
-  padding: 0;
-}
-.playtest__bottomrow.bottomrow-collapsed .playtest__sidezones { display: none; }
 .playtest__hand-toggle {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -991,7 +994,9 @@ html, body {
   .playtest__zone h4 { margin: 0 0 5px; font-size: 11px; }
   .playtest__zone--battlefield { padding: 6px; }
   .playtest__battlefield-canvas { min-height: 220px; }
-  .playtest__bottomrow { gap: 10px; padding-top: 6px; }
+  /* No real hover on touch, so the peek-and-expand-on-hover behavior above
+     would just leave the row stuck peeked — stay fully open here instead. */
+  .playtest__bottomrow { gap: 10px; padding-top: 6px; max-height: none; overflow: visible; transition: none; }
   .playtest__sidezones { gap: 6px; }
   .playtest__pile--tokens { height: 44px; }
   .playtest__pile--libbottom { font-size: 9px; }

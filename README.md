@@ -97,13 +97,18 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     Hand's width either).
   - Command Zone/Tokens and the whole top controls row are both collapsed
     by default (◂/▸ toggle, or the C key for Command Zone) — the Battlefield
-    is what matters once a game's actually underway. Control collapses Hand
-    *and* the piles beside it together, for the same reason. Collapsing
-    shrinks those sections but doesn't hand their space to the Battlefield
-    (nothing here uses viewport-relative sizing) — for that, press **B** to
-    go fully fullscreen: everything except the Battlefield itself
-    disappears and the canvas fills the whole screen. Press B again,
-    Escape, or the small "Exit Fullscreen" button to go back.
+    is what matters once a game's actually underway. Hand and the piles
+    beside it (Library, Graveyard, Exile) work the same way but
+    automatically: they sit peeked down to a sliver until the cursor is
+    actually over them (hovering, or just naturally passing through while
+    dragging a card toward the Graveyard), then expand on their own — no
+    toggle needed. Click the pin icon next to Sort to keep that row open
+    regardless (handy on touch, where there's no hover to trigger it).
+    Collapsing/peeking shrinks those sections but doesn't hand their space
+    to the Battlefield (nothing here uses viewport-relative sizing) — for
+    that, press **B** to go fully fullscreen: everything except the
+    Battlefield itself disappears and the canvas fills the whole screen.
+    Press B again, Escape, or the small "Exit Fullscreen" button to go back.
   - A "Cards" control next to Turn/Life scales every card on the board up
     or down (50%–130%, defaults to 80%) — persisted, so it's a one-time
     "make the Battlefield less cluttered" setting rather than something to
