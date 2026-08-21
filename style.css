@@ -764,7 +764,7 @@ html, body {
 .playtest__selection-box {
   display: none;
   position: fixed;
-  z-index: 15;
+  z-index: 305;
   border: 1px solid var(--accent);
   background: rgba(124, 92, 255, 0.15);
   pointer-events: none;
