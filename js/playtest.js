@@ -74,6 +74,26 @@ function positionGhost(el, x, y) {
   el.style.top = `${y}px`;
 }
 
+// Marquee-select rectangle on the battlefield canvas — same reused-DOM-node
+// pattern as the ghost/preview, so dragging the box stays smooth.
+function ensureMarqueeEl() {
+  let el = document.getElementById('battlefield-marquee');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'battlefield-marquee';
+    el.className = 'playtest__selection-box';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function positionMarquee(el, x1, y1, x2, y2) {
+  el.style.left = `${Math.min(x1, x2)}px`;
+  el.style.top = `${Math.min(y1, y2)}px`;
+  el.style.width = `${Math.abs(x2 - x1)}px`;
+  el.style.height = `${Math.abs(y2 - y1)}px`;
+}
+
 const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'];
 const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
@@ -91,7 +111,8 @@ const TIPS = [
   { action: 'Adjust life', control: '↑ ↓ or W S' },
   { action: 'Draw a card', control: 'Space' },
   { action: 'Browse the Library (tutor effects)', control: 'Enter' },
-  { action: 'Collapse/expand Hand', control: 'Control' },
+  { action: 'Collapse/expand Hand & piles', control: 'Control' },
+  { action: 'Collapse/expand Command Zone', control: 'C' },
   { action: 'Toggle this panel', control: 'T' },
   { action: 'Undo', control: 'Browser Back' },
   { action: 'Flip a double-faced card', control: 'Right-click' },
@@ -106,21 +127,6 @@ function shuffle(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-function primaryTypeOf(card) {
-  const t = card.data?.type_line || '';
-  if (t.includes('Land')) return 'land';
-  if (t.includes('Creature')) return 'creature';
-  return 'other';
-}
-
-function battlefieldGroups(battlefield) {
-  return {
-    creatures: battlefield.filter(c => primaryTypeOf(c) === 'creature'),
-    others: battlefield.filter(c => primaryTypeOf(c) === 'other'),
-    lands: battlefield.filter(c => primaryTypeOf(c) === 'land'),
-  };
 }
 
 function handSortTypeRank(card) {
@@ -198,7 +204,21 @@ function locateCard(state, uid) {
   return null;
 }
 
-function moveCard(state, uid, toZone, { toBottom = false } = {}) {
+// Default landing spot for a card played by click (no drop coordinate to go
+// on) — cascades across a loose grid so successive plays don't all pile on
+// the same spot, wrapping back to the top-left after a few rows. Kept
+// within a band ([24, 80]) that stays clear of the card's own half-height
+// at any card/canvas size actually in use (see battlefieldDropPosition for
+// the precise version used for drag-drops, which has live DOM to measure).
+function nextCascadePosition(battlefield) {
+  const cols = 6, startX = 12, startY = 24, stepX = 13, stepY = 16;
+  const n = battlefield.length;
+  const col = n % cols;
+  const row = Math.floor(n / cols) % 4;
+  return { x: startX + col * stepX, y: startY + row * stepY };
+}
+
+function moveCard(state, uid, toZone, { toBottom = false, x, y } = {}) {
   const located = locateCard(state, uid);
   if (!located || located.zone === toZone) return false;
   const { zone: fromZone, card } = located;
@@ -213,6 +233,11 @@ function moveCard(state, uid, toZone, { toBottom = false } = {}) {
     if (toBottom) state.library.push(card);
     else state.library.unshift(card);
   } else {
+    if (toZone === 'battlefield') {
+      const pos = (x != null && y != null) ? { x, y } : nextCascadePosition(state.battlefield);
+      card.x = pos.x;
+      card.y = pos.y;
+    }
     state[toZone].push(card);
   }
   return true;
@@ -260,18 +285,22 @@ function snapshot(state) {
 
 // ---------- Rendering (Preact) ----------
 
-function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick, onCountersClick, tight }) {
+function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick, onCountersClick, onDuplicateClick, selected }) {
   const showingBack = c.flipped && c.data.backImage;
   const smallImg = showingBack ? (c.data.backImageSmall || c.data.backImage) : (c.data.image_small || c.data.image);
   const fullImg = showingBack ? (c.data.backImage || c.data.backImageSmall) : (c.data.image || c.data.image_small);
   const displayName = showingBack ? (c.data.backName || c.name) : c.name;
+  const onBattlefield = zone === 'battlefield';
   // Counters (+1/+1, -1/-1, or anything custom) only make sense on a
   // permanent, so only the battlefield gets the badge.
-  const counterTotal = zone === 'battlefield' ? Object.values(c.counters || {}).reduce((s, n) => s + n, 0) : 0;
+  const counterTotal = onBattlefield ? Object.values(c.counters || {}).reduce((s, n) => s + n, 0) : 0;
+  // Battlefield cards are freely positioned (left/top, in % of the canvas)
+  // instead of flowing in a row — everywhere else keeps the normal layout.
+  const slotStyle = onBattlefield ? `left:${c.x}%; top:${c.y}%;` : '';
   return html`
-    <div class=${`playtest__card-slot${tight ? ' playtest__card-slot--tight' : ''}`} key=${c.uid}>
+    <div class=${`playtest__card-slot${onBattlefield ? ' playtest__card-slot--free' : ''}`} style=${slotStyle} key=${c.uid}>
       <div
-        class=${`playtest__card${c.tapped ? ' tapped' : ''}`}
+        class=${`playtest__card${c.tapped ? ' tapped' : ''}${selected ? ' selected' : ''}`}
         data-uid=${c.uid}
         data-zone=${zone}
         onClick=${onClick}
@@ -283,17 +312,11 @@ function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick,
       >
         <img loading="lazy" src=${smallImg} alt=${displayName} />
         ${c.data.backImage ? html`<span class="playtest__card-flip-badge" title="Flip: tap this, or right-click the card" onClick=${onFlipClick} onPointerDown=${(e) => e.stopPropagation()}>⟲</span>` : ''}
-        ${zone === 'battlefield' ? html`<span class=${`playtest__card-counter-badge${counterTotal ? '' : ' playtest__card-counter-badge--empty'}`} title="Counters" onClick=${onCountersClick} onPointerDown=${(e) => e.stopPropagation()}>${counterTotal || '+'}</span>` : ''}
+        ${onBattlefield ? html`<span class=${`playtest__card-counter-badge${counterTotal ? '' : ' playtest__card-counter-badge--empty'}`} title="Counters" onClick=${onCountersClick} onPointerDown=${(e) => e.stopPropagation()}>${counterTotal || '+'}</span>` : ''}
+        ${onBattlefield ? html`<span class="playtest__card-dup-badge" title="Duplicate this card" onClick=${onDuplicateClick} onPointerDown=${(e) => e.stopPropagation()}>⧉</span>` : ''}
       </div>
     </div>
   `;
-}
-
-// Overlaps consecutive same-named battlefield cards more tightly than
-// different cards — you don't need to see 10 identical Treasures clearly,
-// just that there are 10 of them.
-function withStackTightness(cards) {
-  return cards.map((c, i) => ({ card: c, tight: i > 0 && cards[i - 1].name === c.name }));
 }
 
 function TokenTile({ t, onClick }) {
@@ -319,14 +342,18 @@ function App({ deck, overlay, onExit }) {
   const [state, setState] = useState(() => resetGame(deck));
   const [browsingZone, setBrowsingZoneState] = useState(null);
   const [showTips, setShowTips] = useState(false);
-  const [handCollapsed, setHandCollapsed] = useState(false);
+  const [handCollapsed, setHandCollapsed] = useState(false); // collapses the whole bottom row: Hand, Library, Graveyard, Exile
+  const [leftColCollapsed, setLeftColCollapsed] = useState(false); // collapses Command Zone + Tokens
+  const [topbarCollapsed, setTopbarCollapsed] = useState(false); // collapses the secondary controls row + hint (Turn/Life/Exit stay put)
   const [countersFor, setCountersFor] = useState(null); // uid of the battlefield card whose counters panel is open, if any
   const [newCounterName, setNewCounterName] = useState('');
+  const [selectedUids, setSelectedUids] = useState(() => new Set()); // battlefield multi-select, via marquee drag on empty canvas
   const stateRef = useRef(state);
   stateRef.current = state;
   const undoStack = useRef([]);
   const pendingClick = useRef(null); // { id, uid } — only used to debounce the Library pile's click-to-draw vs. double-click-to-browse
-  const dragRef = useRef(null); // { uid, fromZone, startX, startY, dragging, previewImg, lastTarget, longPressTimer, longPressFired } — the in-flight pointer drag, if any
+  const dragRef = useRef(null); // { uid, fromZone, startX, startY, dragging, previewImg, lastTarget, lastX, lastY, longPressTimer, longPressFired } — the in-flight pointer drag, if any
+  const marqueeRef = useRef(null); // { canvasEl, startX, startY, moved } — the in-flight battlefield marquee-select, if any
   const suppressClickUntil = useRef(0); // Date.now() cutoff — swallows the ghost click a drag or long-press-flip leaves behind
   const deckTokens = deck.tokens || [];
 
@@ -365,7 +392,19 @@ function App({ deck, overlay, onExit }) {
       commit();
     } else if (fromZone === 'battlefield') {
       pushHistory();
-      card.tapped = !card.tapped;
+      // Clicking a card that's part of the current multi-selection taps/
+      // untaps the whole group together; clicking outside it acts on just
+      // that card and drops the selection.
+      if (selectedUids.size > 1 && selectedUids.has(uid)) {
+        const newTapped = !card.tapped;
+        selectedUids.forEach(u => {
+          const found = locateCard(stateRef.current, u);
+          if (found && found.zone === 'battlefield') found.card.tapped = newTapped;
+        });
+      } else {
+        card.tapped = !card.tapped;
+        if (selectedUids.size) setSelectedUids(new Set());
+      }
       commit();
     } else if (browsingZone === fromZone) {
       pushHistory();
@@ -427,6 +466,26 @@ function App({ deck, overlay, onExit }) {
     setNewCounterName('');
   };
 
+  // A fresh copy of a battlefield card — same printed card, new instance:
+  // untapped, no counters, offset slightly so it doesn't sit exactly on top
+  // of the original.
+  const onDuplicateClick = (uid) => (e) => {
+    e.stopPropagation();
+    const located = locateCard(stateRef.current, uid);
+    if (!located || located.zone !== 'battlefield') return;
+    pushHistory();
+    const copy = {
+      ...cloneCard(located.card),
+      uid: `d${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      tapped: false,
+      counters: {},
+      x: Math.min(97, (located.card.x ?? 50) + 4),
+      y: Math.min(95, (located.card.y ?? 50) + 4),
+    };
+    stateRef.current.battlefield.push(copy);
+    commit();
+  };
+
   const onTokenClick = (template) => (e) => {
     e.stopPropagation();
     pushHistory();
@@ -459,11 +518,16 @@ function App({ deck, overlay, onExit }) {
   const resolveDropTarget = (x, y, fromZone, uid) => {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
-    const cardEl = el.closest('[data-uid]');
-    if (cardEl && cardEl.dataset.uid !== uid && cardEl.dataset.zone === fromZone) {
-      const rect = cardEl.getBoundingClientRect();
-      const insertAfter = (x - rect.left) > rect.width / 2;
-      return { kind: 'reorder', el: cardEl, targetUid: cardEl.dataset.uid, insertAfter };
+    // Battlefield is freely positioned now, so a card dropped there always
+    // just lands at the drop point — card-on-card "reorder" only still
+    // makes sense for the row-based zones (Hand, Command Zone).
+    if (fromZone !== 'battlefield') {
+      const cardEl = el.closest('[data-uid]');
+      if (cardEl && cardEl.dataset.uid !== uid && cardEl.dataset.zone === fromZone) {
+        const rect = cardEl.getBoundingClientRect();
+        const insertAfter = (x - rect.left) > rect.width / 2;
+        return { kind: 'reorder', el: cardEl, targetUid: cardEl.dataset.uid, insertAfter };
+      }
     }
     const zoneEl = el.closest('[data-dropzone]');
     if (zoneEl) return { kind: 'zone', el: zoneEl, zoneName: zoneEl.dataset.dropzone, toBottom: zoneEl.dataset.toBottom === 'true' };
@@ -497,6 +561,23 @@ function App({ deck, overlay, onExit }) {
     if (target?.kind === 'reorder') target.el.classList.add(target.insertAfter ? 'insert-after' : 'insert-before');
     else if (target?.kind === 'zone') target.el.classList.add('drop-hover');
     drag.lastTarget = target;
+    drag.lastX = e.clientX;
+    drag.lastY = e.clientY;
+  };
+
+  // xPct/yPct clamped so a dropped card's center always stays far enough
+  // inside the canvas that the card itself (positioned by its center, half
+  // its own size in every direction) never pokes out past the edge —
+  // margin is derived from the actual card size in play, so this stays
+  // correct whether it's the desktop or landscape-mobile card size.
+  const battlefieldDropPosition = (target, x, y) => {
+    const rect = target.el.getBoundingClientRect();
+    const cardHalf = (parseFloat(getComputedStyle(target.el).getPropertyValue('--card-bf')) || 182) / 2;
+    const marginXPct = Math.min(45, (cardHalf / rect.width) * 100);
+    const marginYPct = Math.min(45, (cardHalf / rect.height) * 100);
+    const xPct = Math.min(100 - marginXPct, Math.max(marginXPct, ((x - rect.left) / rect.width) * 100));
+    const yPct = Math.min(100 - marginYPct, Math.max(marginYPct, ((y - rect.top) / rect.height) * 100));
+    return { x: xPct, y: yPct };
   };
 
   const onPointerUpGlobal = () => {
@@ -509,6 +590,21 @@ function App({ deck, overlay, onExit }) {
       if (target?.kind === 'reorder') {
         pushHistory();
         reorderWithinZone(stateRef.current, drag.fromZone, drag.uid, target.targetUid, target.insertAfter);
+        commit();
+      } else if (target?.kind === 'zone' && target.zoneName === 'battlefield') {
+        const pos = battlefieldDropPosition(target, drag.lastX, drag.lastY);
+        pushHistory();
+        if (drag.fromZone === 'battlefield') {
+          // Repositioning in place — also bring it to the front of the
+          // stacking order, matching the intuition of picking a card up.
+          const idx = stateRef.current.battlefield.findIndex(c => c.uid === drag.uid);
+          const [card] = stateRef.current.battlefield.splice(idx, 1);
+          card.x = pos.x;
+          card.y = pos.y;
+          stateRef.current.battlefield.push(card);
+        } else {
+          moveCard(stateRef.current, drag.uid, 'battlefield', pos);
+        }
         commit();
       } else if (target?.kind === 'zone' && target.zoneName !== drag.fromZone) {
         pushHistory();
@@ -554,6 +650,70 @@ function App({ deck, overlay, onExit }) {
     window.addEventListener('pointermove', onPointerMoveGlobal, { passive: false });
     window.addEventListener('pointerup', onPointerUpGlobal);
     window.addEventListener('pointercancel', onPointerCancelGlobal);
+  };
+
+  // Marquee-select: pressing on empty battlefield canvas (not a card) and
+  // dragging box-selects whatever cards fall inside the rectangle. A press
+  // that doesn't move — a plain click on empty space — clears the
+  // selection instead, same as clicking a card outside it.
+  const endMarquee = () => {
+    window.removeEventListener('pointermove', onMarqueeMove);
+    window.removeEventListener('pointerup', onMarqueeUp);
+    window.removeEventListener('pointercancel', onMarqueeCancel);
+    document.getElementById('battlefield-marquee')?.classList.remove('open');
+    marqueeRef.current = null;
+  };
+
+  // Same rect-intersection query used live (while dragging, so the
+  // highlight tracks the box like Windows' own icon-select) and once more
+  // on release, in case the very last pointermove landed slightly off from
+  // the final pointerup coordinate.
+  const marqueeHits = (canvasEl, x1, y1, x2, y2) => {
+    const hits = new Set();
+    canvasEl.querySelectorAll('[data-uid]').forEach(cardEl => {
+      const r = cardEl.getBoundingClientRect();
+      if (r.left < x2 && r.right > x1 && r.top < y2 && r.bottom > y1) hits.add(cardEl.dataset.uid);
+    });
+    return hits;
+  };
+
+  const onMarqueeMove = (e) => {
+    const m = marqueeRef.current;
+    if (!m) return;
+    const dist = Math.hypot(e.clientX - m.startX, e.clientY - m.startY);
+    if (!m.moved) {
+      if (dist < DRAG_THRESHOLD) return;
+      m.moved = true;
+      ensureMarqueeEl().classList.add('open');
+    }
+    e.preventDefault();
+    positionMarquee(ensureMarqueeEl(), m.startX, m.startY, e.clientX, e.clientY);
+    const x1 = Math.min(m.startX, e.clientX), x2 = Math.max(m.startX, e.clientX);
+    const y1 = Math.min(m.startY, e.clientY), y2 = Math.max(m.startY, e.clientY);
+    setSelectedUids(marqueeHits(m.canvasEl, x1, y1, x2, y2));
+  };
+
+  const onMarqueeUp = (e) => {
+    const m = marqueeRef.current;
+    if (m?.moved) {
+      const x1 = Math.min(m.startX, e.clientX), x2 = Math.max(m.startX, e.clientX);
+      const y1 = Math.min(m.startY, e.clientY), y2 = Math.max(m.startY, e.clientY);
+      setSelectedUids(marqueeHits(m.canvasEl, x1, y1, x2, y2));
+    } else {
+      setSelectedUids(new Set());
+    }
+    endMarquee();
+  };
+
+  const onMarqueeCancel = () => endMarquee();
+
+  const onBattlefieldCanvasPointerDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest('[data-uid]')) return; // a card handles its own drag
+    marqueeRef.current = { canvasEl: e.currentTarget, startX: e.clientX, startY: e.clientY, moved: false };
+    window.addEventListener('pointermove', onMarqueeMove, { passive: false });
+    window.addEventListener('pointerup', onMarqueeUp);
+    window.addEventListener('pointercancel', onMarqueeCancel);
   };
 
   const onDrawPileClick = (e) => {
@@ -612,7 +772,8 @@ function App({ deck, overlay, onExit }) {
       else if (e.key === 'Enter') { e.preventDefault(); setBrowsingZoneState('library'); }
       else if (key === 't') { e.preventDefault(); setShowTips(v => !v); }
       else if (e.key === 'Control' && !e.repeat) { setHandCollapsed(v => !v); }
-      else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); }
+      else if (key === 'c') { setLeftColCollapsed(v => !v); }
+      else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); setSelectedUids(new Set()); }
     };
     const onPopState = () => {
       if (!overlay.classList.contains('open')) return;
@@ -627,8 +788,6 @@ function App({ deck, overlay, onExit }) {
       window.removeEventListener('popstate', onPopState);
     };
   }, []);
-
-  const { creatures, others, lands } = battlefieldGroups(state.battlefield);
 
   return html`
     <div class="playtest__rotate-gate">
@@ -650,19 +809,23 @@ function App({ deck, overlay, onExit }) {
           <strong>${state.life}</strong>
           <button onClick=${doAction(() => { stateRef.current.life++; })}>+</button>
         </span>
-        <button class="btn" disabled=${!undoStack.current.length} onClick=${() => undo()}>↺ Undo</button>
-        <button class="btn" onClick=${doAction(() => { stateRef.current.library = shuffle(stateRef.current.library); })}>Shuffle Library</button>
-        <button class="btn" onClick=${doAction(() => drawN(stateRef.current, 1))}>Draw Card</button>
-        <button class="btn" onClick=${() => setState(resetGame(deck))}>Mulligan</button>
-        <button class="btn" onClick=${() => setState(resetGame(deck))}>New Game</button>
+        <div class=${`playtest__controls-extra${topbarCollapsed ? ' controls-collapsed' : ''}`}>
+          <button class="btn" disabled=${!undoStack.current.length} onClick=${() => undo()}>↺ Undo</button>
+          <button class="btn" onClick=${doAction(() => { stateRef.current.library = shuffle(stateRef.current.library); })}>Shuffle Library</button>
+          <button class="btn" onClick=${doAction(() => drawN(stateRef.current, 1))}>Draw Card</button>
+          <button class="btn" onClick=${() => setState(resetGame(deck))}>Mulligan</button>
+          <button class="btn" onClick=${() => setState(resetGame(deck))}>New Game</button>
+        </div>
+        <button class="playtest__topbar-toggle" title="Collapse/expand controls" onClick=${() => setTopbarCollapsed(v => !v)}>${topbarCollapsed ? '▸' : '◂'}</button>
         <button class="btn btn--danger" onClick=${onExit}>Exit</button>
       </div>
     </div>
 
-    <div class="playtest__hint">Press <strong>T</strong> for controls & tips.</div>
+    <div class=${`playtest__hint${topbarCollapsed ? ' hint-collapsed' : ''}`}>Press <strong>T</strong> for controls & tips.</div>
 
     <div class="playtest__board">
-      <div class="playtest__leftcol">
+      <div class=${`playtest__leftcol${leftColCollapsed ? ' leftcol-collapsed' : ''}`}>
+        <button class="playtest__leftcol-toggle" title="Collapse/expand Command Zone (C)" onClick=${() => setLeftColCollapsed(v => !v)}>${leftColCollapsed ? '▸' : '◂'}</button>
         ${state.hasCommander ? html`
           <div class="playtest__zone playtest__zone--command" data-dropzone="command">
             <h4>Command Zone</h4>
@@ -679,26 +842,30 @@ function App({ deck, overlay, onExit }) {
         </div>
       </div>
 
-      <div class="playtest__zone playtest__zone--battlefield" data-dropzone="battlefield">
+      <div class="playtest__zone playtest__zone--battlefield">
         <h4>Battlefield <span class="count">${state.battlefield.length}</span></h4>
         ${state.battlefield.length ? '' : html`<span class="playtest__empty-hint">Drag a card here to play it.</span>`}
-        <div class="playtest__battlefield-row">
-          <span class="playtest__battlefield-label">Creatures</span>
-          <div class="playtest__cards">
-            ${withStackTightness(creatures).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} />`)}
-          </div>
+        <div class="playtest__battlefield-canvas" data-dropzone="battlefield" onPointerDown=${onBattlefieldCanvasPointerDown}>
+          ${state.battlefield.map(c => html`<${CardTile} c=${c} zone="battlefield" selected=${selectedUids.has(c.uid)} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} onDuplicateClick=${onDuplicateClick(c.uid)} />`)}
         </div>
-        <div class="playtest__battlefield-row">
-          <span class="playtest__battlefield-label">Other</span>
-          <div class="playtest__cards">
-            ${withStackTightness(others).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} />`)}
-          </div>
-        </div>
-        <div class="playtest__battlefield-row">
-          <span class="playtest__battlefield-label">Lands</span>
-          <div class="playtest__cards">
-            ${withStackTightness(lands).map(({ card: c, tight }) => html`<${CardTile} c=${c} zone="battlefield" tight=${tight} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} />`)}
-          </div>
+      </div>
+    </div>
+
+    <div class=${`playtest__bottomrow${handCollapsed ? ' bottomrow-collapsed' : ''}`}>
+      <div class="playtest__zone playtest__zone--hand" data-dropzone="hand">
+        <h4>Hand <span class="count">${state.hand.length}</span>
+          <span class="playtest__sort">
+            Sort:
+            <button onClick=${onSortHand('cmc')}>CMC</button>
+            <button onClick=${onSortHand('type')}>Type</button>
+            <button onClick=${onSortHand('name')}>Name</button>
+          </span>
+          <button class="playtest__hand-toggle" title="Collapse/expand Hand, Library, Graveyard & Exile (Control)" onClick=${() => setHandCollapsed(v => !v)}>${handCollapsed ? '▲' : '▼'}</button>
+        </h4>
+        <div class="playtest__cards playtest__cards--hand">
+          ${state.hand.length
+            ? state.hand.map(c => html`<${CardTile} c=${c} zone="hand" onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)
+            : html`<span class="playtest__empty-hint">No cards in hand.</span>`}
         </div>
       </div>
 
@@ -712,31 +879,16 @@ function App({ deck, overlay, onExit }) {
             ↓ Bottom
           </div>
         </div>
-        <div class="playtest__pile playtest__pile--gy" onClick=${onBrowsePile('graveyard')} data-dropzone="graveyard" title="Graveyard — click to browse, drag a card here">
-          <strong>${state.graveyard.length}</strong>
-          Graveyard
+        <div class="playtest__gyexile">
+          <div class="playtest__pile playtest__pile--gy" onClick=${onBrowsePile('graveyard')} data-dropzone="graveyard" title="Graveyard — click to browse, drag a card here">
+            <strong>${state.graveyard.length}</strong>
+            Graveyard
+          </div>
+          <div class="playtest__pile playtest__pile--exile" onClick=${onBrowsePile('exile')} data-dropzone="exile" title="Exile — click to browse, drag a card here">
+            <strong>${state.exile.length}</strong>
+            Exile
+          </div>
         </div>
-        <div class="playtest__pile playtest__pile--exile" onClick=${onBrowsePile('exile')} data-dropzone="exile" title="Exile — click to browse, drag a card here">
-          <strong>${state.exile.length}</strong>
-          Exile
-        </div>
-      </div>
-    </div>
-
-    <div class=${`playtest__zone playtest__zone--hand${handCollapsed ? ' hand-collapsed' : ''}`} data-dropzone="hand">
-      <h4>Hand <span class="count">${state.hand.length}</span>
-        <span class="playtest__sort">
-          Sort:
-          <button onClick=${onSortHand('cmc')}>CMC</button>
-          <button onClick=${onSortHand('type')}>Type</button>
-          <button onClick=${onSortHand('name')}>Name</button>
-        </span>
-        <button class="playtest__hand-toggle" title="Collapse/expand hand (Control)" onClick=${() => setHandCollapsed(v => !v)}>${handCollapsed ? '▲' : '▼'}</button>
-      </h4>
-      <div class="playtest__cards playtest__cards--hand">
-        ${state.hand.length
-          ? state.hand.map(c => html`<${CardTile} c=${c} zone="hand" onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} />`)
-          : html`<span class="playtest__empty-hint">No cards in hand.</span>`}
       </div>
     </div>
     </div>

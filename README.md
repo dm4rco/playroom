@@ -74,12 +74,27 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     the same code path. In portrait on a phone the playtester asks you to
     rotate; landscape gets a compact version of the same layout.
   - Hovering a hand card previews it without moving it; clicking it plays it.
-    Battlefield slots always reserve room for a tapped (rotated) card so
-    nothing jumps around, and the Command Zone/battlefield rows fan
-    overlapping cards instead of wrapping — handy since 90%+ of decks only
-    ever have one or two commanders, and a battlefield can easily have a
-    dozen Treasure tokens (which overlap tighter than usual, since you don't
-    need to see 10 identical tokens clearly).
+    The Battlefield is a free canvas — drag a card anywhere and it stays put,
+    same as a real table (a click-to-play with no drop point just cascades
+    into a loose grid). The Command Zone still fans overlapping cards
+    instead of wrapping, since 90%+ of decks only ever have one or two
+    commanders.
+  - Marquee-select a group of battlefield cards by dragging on empty canvas
+    space, then click any one of them to tap/untap the whole group together.
+    Click empty space or press Escape to clear the selection.
+  - Every battlefield card has a duplicate badge (top-left corner) for
+    quickly making a second copy of it — untapped, no counters, offset
+    slightly so it doesn't sit exactly on top of the original.
+  - Library, Graveyard, and Exile sit next to the Hand at the bottom of the
+    board instead of beside the Battlefield, so the Battlefield gets the
+    full width to spread cards out in (Graveyard and Exile are stacked on
+    top of each other rather than side by side, so they don't eat into the
+    Hand's width either).
+  - Command Zone/Tokens and the whole top controls row are both
+    collapsible (◂/▸ toggle, or the C key for Command Zone) — useful once a
+    game's actually underway and the Battlefield is what matters. Control
+    now collapses Hand *and* the piles beside it together, for the same
+    reason.
   - The Hand caps at ~2 rows and scrolls internally, so drawing a lot of
     cards doesn't push the rest of the board out of reach. Sort buttons
     (CMC / Type / Name) reorder it on demand, or drag cards to reorder

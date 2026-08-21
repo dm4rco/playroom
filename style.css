@@ -425,7 +425,8 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 .playtest__title { font-size: 16px; font-weight: 600; }
-.playtest__controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.playtest__controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.playtest__controls .btn { padding: 9px 12px; }
 .playtest__stat {
   display: flex;
   align-items: center;
@@ -456,11 +457,29 @@ html, body {
   font-size: 12px;
   margin-bottom: 16px;
 }
+.playtest__hint.hint-collapsed { display: none; }
+/* Collapsed controls — Turn/Life (used constantly) and Exit (always need a
+   way out) stay put; the setup/utility buttons fold away since a duel in
+   progress needs them far less often. */
+.playtest__controls-extra { display: contents; }
+.playtest__controls-extra.controls-collapsed { display: none; }
+.playtest__topbar-toggle {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 5px;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+}
+.playtest__topbar-toggle:hover { border-color: var(--accent); color: var(--text); }
 
 .playtest__board {
   display: flex;
   gap: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 .playtest__zone { flex: 1; min-width: 0; }
 .playtest__zone h4 {
@@ -476,16 +495,37 @@ html, body {
 .playtest__zone h4 .count { font-weight: 400; }
 /* Wide enough that a single commander (by far the common case) doesn't need
    to scroll — a second, overlapping commander only scrolls a little. */
-.playtest__leftcol { flex: 0 0 190px; display: flex; flex-direction: column; gap: 14px; }
+.playtest__leftcol { flex: 0 0 190px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+/* Collapsed Command Zone/Tokens — Battlefield is the part that actually
+   matters once a game's underway, so this reclaims the width for it.
+   Toggled via the ◂/▸ button or the C key. */
+.playtest__leftcol.leftcol-collapsed { flex: 0 0 26px; gap: 0; }
+.playtest__leftcol.leftcol-collapsed .playtest__zone--command,
+.playtest__leftcol.leftcol-collapsed .playtest__pile--tokens { display: none; }
+.playtest__leftcol-toggle {
+  align-self: flex-end;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 5px;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.playtest__leftcol-toggle:hover { border-color: var(--accent); color: var(--text); }
 .playtest__zone--battlefield,
 .playtest__zone--hand,
 .playtest__zone--command {
   transition: background-color 0.1s ease, border-color 0.1s ease;
 }
-/* Hovering a fanned-out card bumps its z-index (below) so it doesn't stay
-   hidden behind the next card in the row — but without a stacking context
-   of its own, that elevated z-index escaped Battlefield/Command entirely
-   and could paint over neighboring zones like Hand. Contain it. */
+/* Hovering a card (or bringing one to front while dragging) bumps its
+   z-index (below) so it doesn't stay hidden under others — but without a
+   stacking context of its own, that elevated z-index escaped Battlefield/
+   Command entirely and could paint over neighboring zones like Hand.
+   Contain it. */
 .playtest__zone--battlefield,
 .playtest__zone--command {
   isolation: isolate;
@@ -501,20 +541,26 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
-  min-height: 260px;
 }
-.playtest__battlefield-row { margin-bottom: 14px; }
-.playtest__battlefield-row:last-child { margin-bottom: 0; }
-.playtest__battlefield-label {
-  display: block;
-  font-size: 11px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 8px;
+/* Battlefield is a free canvas — cards go wherever they're dropped instead
+   of flowing into rows, so it needs its own fixed footprint rather than
+   growing/shrinking with content. */
+.playtest__battlefield-canvas {
+  position: relative;
+  min-height: 420px;
 }
-.playtest__sidezones { flex: 0 0 160px; display: flex; flex-direction: column; gap: 14px; }
+.playtest__battlefield-canvas .playtest__card-slot:hover { z-index: 5; }
+
+.playtest__bottomrow { display: flex; gap: 20px; align-items: flex-start; }
+/* Sidezones sit beside Hand now, so they read as a compact row of piles
+   matching Hand's card height instead of a tall column. */
+.playtest__sidezones { flex: 0 0 auto; display: flex; flex-direction: row; gap: 10px; }
+.playtest__sidezones .playtest__pile { width: var(--card-w); }
 .playtest__librarygroup { display: flex; flex-direction: column; gap: 4px; }
+/* Graveyard/Exile stacked in one column (instead of two side-by-side piles)
+   frees up a whole pile-width for Hand. */
+.playtest__gyexile { display: flex; flex-direction: column; gap: 4px; }
+.playtest__gyexile .playtest__pile { aspect-ratio: auto; height: calc((var(--card-h) - 4px) / 2); }
 .playtest__pile {
   aspect-ratio: 5/7;
   border: 2px dashed var(--border);
@@ -553,34 +599,36 @@ html, body {
   align-items: center;
   justify-content: center;
 }
-/* Battlefield/Command slots reserve a square footprint big enough for a
-   tapped (rotated) card, so tapping/untapping never reflows neighbors. */
-.playtest__zone--battlefield .playtest__card-slot,
+/* Command Zone slot reserves a square footprint big enough for a tapped
+   (rotated) card, so tapping/untapping never reflows neighbors. Battlefield
+   slots get their square size from .playtest__card-slot--free below. */
 .playtest__zone--command .playtest__card-slot { width: var(--card-bf); height: var(--card-bf); }
 
-/* Battlefield rows (and the Command Zone, which almost always holds just 1-2
-   cards) overlap cards like a fanned stack instead of wrapping to a new row
-   — a second commander shouldn't double the box's height. Scrolls
-   horizontally if it still doesn't fit. Hovering brings a card to the front. */
-.playtest__zone--battlefield .playtest__cards,
+/* Command Zone (which almost always holds just 1-2 cards) overlaps them
+   like a fanned stack instead of wrapping to a new row — a second commander
+   shouldn't double the box's height. Scrolls horizontally if it still
+   doesn't fit. Hovering brings a card to the front. */
 .playtest__zone--command .playtest__cards {
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 10px;
 }
-.playtest__zone--battlefield .playtest__card-slot,
 .playtest__zone--command .playtest__card-slot {
   margin-left: var(--overlap);
   position: relative;
 }
-.playtest__zone--battlefield .playtest__card-slot:first-child,
 .playtest__zone--command .playtest__card-slot:first-child { margin-left: 0; }
-/* A copy of the same card right before it — no need to see it clearly,
-   just that it's there, so overlap much tighter than usual. */
-.playtest__zone--battlefield .playtest__card-slot--tight { margin-left: var(--overlap-tight); }
-.playtest__zone--battlefield .playtest__card-slot:hover,
 .playtest__zone--command .playtest__card-slot:hover { z-index: 5; }
+
+/* Battlefield — freely positioned by left/top (%, set inline from the drop
+   point), centered on that point rather than anchored by a corner. */
+.playtest__card-slot--free {
+  position: absolute;
+  width: var(--card-bf);
+  height: var(--card-bf);
+  transform: translate(-50%, -50%);
+}
 .playtest__card {
   position: relative;
   width: var(--card-w);
@@ -662,9 +710,48 @@ html, body {
 /* No counters yet — a faint "+" so the badge is discoverable without
    competing with the card art for attention. */
 .playtest__card-counter-badge--empty { opacity: 0.45; font-weight: 400; }
-.playtest__zone--hand {
-  position: sticky;
-  bottom: 0;
+.playtest__card-dup-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.75);
+  color: var(--text);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  cursor: pointer;
+}
+.playtest__card-dup-badge:hover { background: var(--accent); }
+
+/* Battlefield multi-select: a marquee-drag on empty canvas draws this box
+   (positioned/sized directly, same reused-node pattern as the drag ghost),
+   and every card it lands on gets the .selected outline. */
+.playtest__selection-box {
+  display: none;
+  position: fixed;
+  z-index: 15;
+  border: 1px solid var(--accent);
+  background: rgba(124, 92, 255, 0.15);
+  pointer-events: none;
+}
+.playtest__selection-box.open { display: block; }
+.playtest__card.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Hand + the piles beside it are the one part of the board that stays
+   pinned to the bottom of the scrollable overlay. */
+.playtest__bottomrow {
+  /* Not sticky: the free-canvas Battlefield has a bounded, predictable
+     height (unlike the old row layout, which could grow with content), so
+     there's no more tall/scrolling board for this to stay pinned above —
+     and a sticky box here risked visually overlapping a full battlefield
+     above it, which also confused drag-and-drop's elementFromPoint hit
+     test into resolving drops as hitting Graveyard/Exile instead of the
+     battlefield underneath them. */
   background: var(--bg);
   padding-top: 14px;
   border-top: 1px solid var(--border);
@@ -679,14 +766,17 @@ html, body {
   padding-bottom: 4px;
   transition: max-height 0.2s ease;
 }
-/* Collapsed hand — cards stay in the DOM (nothing is discarded), just
+/* Collapsed bottom row — cards stay in the DOM (nothing is discarded), just
    folded away to reclaim vertical space, most useful on a short mobile
-   viewport. Toggled via the ▼ button or the Control key. */
-.playtest__zone--hand.hand-collapsed .playtest__cards--hand {
+   viewport. Toggled via the ▼ button or the Control key. Hand folds its
+   cards; the piles beside it just disappear entirely (they don't need a
+   "folded" state, a summary tile is already compact). */
+.playtest__bottomrow.bottomrow-collapsed .playtest__cards--hand {
   max-height: 0;
   overflow: hidden;
   padding: 0;
 }
+.playtest__bottomrow.bottomrow-collapsed .playtest__sidezones { display: none; }
 .playtest__hand-toggle {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -868,11 +958,11 @@ html, body {
   .playtest__hint { margin-bottom: 6px; font-size: 11px; }
   .playtest__board { gap: 8px; margin-bottom: 8px; }
   .playtest__leftcol { flex: 0 0 104px; gap: 6px; }
-  .playtest__sidezones { flex: 0 0 84px; gap: 6px; }
   .playtest__zone h4 { margin: 0 0 5px; font-size: 11px; }
-  .playtest__zone--battlefield { min-height: 104px; padding: 6px; }
-  .playtest__battlefield-row { margin-bottom: 5px; }
-  .playtest__battlefield-label { font-size: 9px; margin-bottom: 3px; }
+  .playtest__zone--battlefield { padding: 6px; }
+  .playtest__battlefield-canvas { min-height: 220px; }
+  .playtest__bottomrow { gap: 10px; padding-top: 6px; }
+  .playtest__sidezones { gap: 6px; }
   .playtest__pile--tokens { height: 44px; }
   .playtest__pile--libbottom { height: 34px; font-size: 9px; }
   .playtest__pile strong { font-size: 16px; }
@@ -880,10 +970,11 @@ html, body {
   .playtest__cards { gap: 5px; }
   .playtest__cards--hand { max-height: 130px; }
   .card-drag-ghost img { width: 74px; }
-  /* Bigger tap target for the flip badge — 18px is fine for a mouse
-     pointer but too small to reliably hit with a finger. */
+  /* Bigger tap targets — 18px is fine for a mouse pointer but too small to
+     reliably hit with a finger. */
   .playtest__card-flip-badge { width: 24px; height: 24px; font-size: 13px; top: 2px; right: 2px; }
   .playtest__card-counter-badge { min-width: 22px; height: 22px; font-size: 12px; bottom: 2px; left: 2px; }
+  .playtest__card-dup-badge { width: 22px; height: 22px; font-size: 12px; top: 2px; left: 2px; }
 }
 
 /* Mobile site chrome — the sidebar becomes an off-canvas drawer (opened via
