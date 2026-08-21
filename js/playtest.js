@@ -113,6 +113,7 @@ const TIPS = [
   { action: 'Browse the Library (tutor effects)', control: 'Enter' },
   { action: 'Collapse/expand Hand & piles', control: 'Control' },
   { action: 'Collapse/expand Command Zone', control: 'C' },
+  { action: 'Fullscreen Battlefield (hide everything else)', control: 'B' },
   { action: 'Toggle this panel', control: 'T' },
   { action: 'Undo', control: 'Browser Back' },
   { action: 'Flip a double-faced card', control: 'Right-click' },
@@ -345,6 +346,7 @@ function App({ deck, overlay, onExit }) {
   const [handCollapsed, setHandCollapsed] = useState(false); // collapses the whole bottom row: Hand, Library, Graveyard, Exile
   const [leftColCollapsed, setLeftColCollapsed] = useState(false); // collapses Command Zone + Tokens
   const [topbarCollapsed, setTopbarCollapsed] = useState(false); // collapses the secondary controls row + hint (Turn/Life/Exit stay put)
+  const [battlefieldFullscreen, setBattlefieldFullscreen] = useState(false); // B — everything but the Battlefield disappears
   const [countersFor, setCountersFor] = useState(null); // uid of the battlefield card whose counters panel is open, if any
   const [newCounterName, setNewCounterName] = useState('');
   const [selectedUids, setSelectedUids] = useState(() => new Set()); // battlefield multi-select, via marquee drag on empty canvas
@@ -773,7 +775,8 @@ function App({ deck, overlay, onExit }) {
       else if (key === 't') { e.preventDefault(); setShowTips(v => !v); }
       else if (e.key === 'Control' && !e.repeat) { setHandCollapsed(v => !v); }
       else if (key === 'c') { setLeftColCollapsed(v => !v); }
-      else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); setSelectedUids(new Set()); }
+      else if (key === 'b') { setBattlefieldFullscreen(v => !v); }
+      else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); setSelectedUids(new Set()); setBattlefieldFullscreen(false); }
     };
     const onPopState = () => {
       if (!overlay.classList.contains('open')) return;
@@ -795,6 +798,14 @@ function App({ deck, overlay, onExit }) {
       <h3>Rotate your device</h3>
       <p>The playtester needs a bit of width to lay out the board — turn your phone sideways to keep going.</p>
     </div>
+    ${battlefieldFullscreen ? html`
+      <div class="playtest__main playtest__fullscreen-battlefield">
+        <button class="playtest__fullscreen-exit" title="Exit fullscreen (B or Escape)" onClick=${() => setBattlefieldFullscreen(false)}>✕ Exit Fullscreen</button>
+        <div class="playtest__battlefield-canvas" data-dropzone="battlefield" onPointerDown=${onBattlefieldCanvasPointerDown}>
+          ${state.battlefield.map(c => html`<${CardTile} c=${c} zone="battlefield" selected=${selectedUids.has(c.uid)} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} onDuplicateClick=${onDuplicateClick(c.uid)} />`)}
+        </div>
+      </div>
+    ` : html`
     <div class="playtest__main">
     <div class="playtest__topbar">
       <div class="playtest__title">${state.deckName} — Goldfish Test</div>
@@ -892,6 +903,7 @@ function App({ deck, overlay, onExit }) {
       </div>
     </div>
     </div>
+    `}
 
     ${browsingZone ? html`
       <div class="zone-browser">

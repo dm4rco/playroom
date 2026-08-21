@@ -94,7 +94,12 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     collapsible (◂/▸ toggle, or the C key for Command Zone) — useful once a
     game's actually underway and the Battlefield is what matters. Control
     now collapses Hand *and* the piles beside it together, for the same
-    reason.
+    reason. Collapsing shrinks those sections but doesn't hand their space
+    to the Battlefield (nothing here uses viewport-relative sizing) — for
+    that, press **B** to go fully fullscreen: everything except the
+    Battlefield itself disappears and the canvas fills the whole screen.
+    Press B again, Escape, or the small "Exit Fullscreen" button to go
+    back.
   - The Hand caps at ~2 rows and scrolls internally, so drawing a lot of
     cards doesn't push the rest of the board out of reach. Sort buttons
     (CMC / Type / Name) reorder it on demand, or drag cards to reorder

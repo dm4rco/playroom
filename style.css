@@ -551,6 +551,33 @@ html, body {
 }
 .playtest__battlefield-canvas .playtest__card-slot:hover { z-index: 5; }
 
+/* Fullscreen Battlefield (B) — everything else is gone, not just visually
+   collapsed, so the canvas can genuinely fill the screen rather than the
+   page just getting shorter to scroll. */
+.playtest__fullscreen-battlefield {
+  position: relative;
+  height: 100%;
+}
+.playtest__fullscreen-battlefield .playtest__battlefield-canvas {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+}
+.playtest__fullscreen-exit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 30;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.playtest__fullscreen-exit:hover { border-color: var(--accent); }
+
 .playtest__bottomrow { display: flex; gap: 20px; align-items: flex-start; }
 /* Sidezones sit beside Hand now, so they read as a compact row of piles
    matching Hand's card height instead of a tall column. */
