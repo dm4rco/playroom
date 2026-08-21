@@ -405,12 +405,16 @@ html, body {
   user-select: none;
   /* Card/slot sizing as variables so the mobile-landscape media query
      (below) can rescale everything with a handful of overrides instead of
-     duplicating every rule that touches a card's dimensions. */
-  --card-w: 130px;
-  --card-h: 182px;
-  --card-bf: 182px; /* square battlefield/command slot — room for a tapped (rotated) card */
-  --overlap: -95px; /* fanned-card overlap amount */
-  --overlap-tight: -160px; /* tighter overlap for consecutive same-name cards */
+     duplicating every rule that touches a card's dimensions. --card-scale
+     is a separate multiplier (set inline, from the card-size control) that
+     composes with whichever breakpoint's base sizes are active, rather
+     than the two fighting over specificity. */
+  --card-scale: 1;
+  --card-w: calc(130px * var(--card-scale));
+  --card-h: calc(182px * var(--card-scale));
+  --card-bf: calc(182px * var(--card-scale)); /* square battlefield/command slot — room for a tapped (rotated) card */
+  --overlap: calc(-95px * var(--card-scale)); /* fanned-card overlap amount */
+  --overlap-tight: calc(-160px * var(--card-scale)); /* tighter overlap for consecutive same-name cards */
 }
 .playtest-overlay.open { display: block; }
 
@@ -587,7 +591,8 @@ html, body {
 /* Graveyard/Exile stacked in one column (instead of two side-by-side piles)
    frees up a whole pile-width for Hand. */
 .playtest__gyexile { display: flex; flex-direction: column; gap: 4px; }
-.playtest__gyexile .playtest__pile { aspect-ratio: auto; height: calc((var(--card-h) - 4px) / 2); }
+.playtest__gyexile .playtest__pile,
+.playtest__librarygroup .playtest__pile { aspect-ratio: auto; height: calc((var(--card-h) - 4px) / 2); }
 .playtest__pile {
   aspect-ratio: 5/7;
   border: 2px dashed var(--border);
@@ -605,8 +610,6 @@ html, body {
 .playtest__pile strong { font-size: 26px; color: var(--text); }
 .playtest__pile:hover { border-color: var(--accent); color: var(--text); }
 .playtest__pile--libbottom {
-  aspect-ratio: auto;
-  height: 48px;
   font-size: 12px;
   cursor: default;
 }
@@ -969,11 +972,11 @@ html, body {
 @media (max-width: 900px) and (orientation: landscape) {
   .playtest-overlay {
     padding: 10px 12px;
-    --card-w: 74px;
-    --card-h: 104px;
-    --card-bf: 104px;
-    --overlap: -52px;
-    --overlap-tight: -88px;
+    --card-w: calc(74px * var(--card-scale));
+    --card-h: calc(104px * var(--card-scale));
+    --card-bf: calc(104px * var(--card-scale));
+    --overlap: calc(-52px * var(--card-scale));
+    --overlap-tight: calc(-88px * var(--card-scale));
   }
   .playtest__topbar { margin-bottom: 6px; padding-bottom: 6px; gap: 6px 10px; }
   .playtest__title { font-size: 13px; }
@@ -991,7 +994,7 @@ html, body {
   .playtest__bottomrow { gap: 10px; padding-top: 6px; }
   .playtest__sidezones { gap: 6px; }
   .playtest__pile--tokens { height: 44px; }
-  .playtest__pile--libbottom { height: 34px; font-size: 9px; }
+  .playtest__pile--libbottom { font-size: 9px; }
   .playtest__pile strong { font-size: 16px; }
   .playtest__pile { font-size: 11px; gap: 2px; }
   .playtest__cards { gap: 5px; }

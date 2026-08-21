@@ -103,6 +103,11 @@ const DRAW_PILE_KEY = '__draw-pile__';
 const HAND_SORT_TYPE_ORDER = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'];
 const DRAG_THRESHOLD = 6; // px of pointer movement before a press becomes a drag, not a click
 const LONG_PRESS_DELAY = 550; // ms — touch has no hover, so a held (but still) press peeks a full-size preview instead
+const CARD_SCALE_KEY = 'edh_card_scale';
+const CARD_SCALE_STEP = 0.1;
+const CARD_SCALE_MIN = 0.5;
+const CARD_SCALE_MAX = 1.3;
+const CARD_SCALE_DEFAULT = 0.8; // a bit smaller out of the box — the Battlefield reads as cluttered at full size once it has more than a few cards
 
 // Short and worth actually memorizing — everything else (click to play,
 // drag to move, etc.) is discoverable on its own and doesn't need a tip.
@@ -114,6 +119,7 @@ const TIPS = [
   { action: 'Collapse/expand Hand & piles', control: 'Control' },
   { action: 'Collapse/expand Command Zone', control: 'C' },
   { action: 'Fullscreen Battlefield (hide everything else)', control: 'B' },
+  { action: 'Mulligan', control: 'M' },
   { action: 'Toggle this panel', control: 'T' },
   { action: 'Undo', control: 'Browser Back' },
   { action: 'Flip a double-faced card', control: 'Right-click' },
@@ -344,9 +350,13 @@ function App({ deck, overlay, onExit }) {
   const [browsingZone, setBrowsingZoneState] = useState(null);
   const [showTips, setShowTips] = useState(false);
   const [handCollapsed, setHandCollapsed] = useState(false); // collapses the whole bottom row: Hand, Library, Graveyard, Exile
-  const [leftColCollapsed, setLeftColCollapsed] = useState(false); // collapses Command Zone + Tokens
-  const [topbarCollapsed, setTopbarCollapsed] = useState(false); // collapses the secondary controls row + hint (Turn/Life/Exit stay put)
+  const [leftColCollapsed, setLeftColCollapsed] = useState(true); // collapses Command Zone + Tokens — starts collapsed, Battlefield matters more
+  const [topbarCollapsed, setTopbarCollapsed] = useState(true); // collapses the secondary controls row + hint (Turn/Life/Exit stay put) — starts collapsed
   const [battlefieldFullscreen, setBattlefieldFullscreen] = useState(false); // B — everything but the Battlefield disappears
+  const [cardScale, setCardScale] = useState(() => {
+    const saved = parseFloat(localStorage.getItem(CARD_SCALE_KEY));
+    return Number.isFinite(saved) ? saved : CARD_SCALE_DEFAULT;
+  });
   const [countersFor, setCountersFor] = useState(null); // uid of the battlefield card whose counters panel is open, if any
   const [newCounterName, setNewCounterName] = useState('');
   const [selectedUids, setSelectedUids] = useState(() => new Set()); // battlefield multi-select, via marquee drag on empty canvas
@@ -358,6 +368,19 @@ function App({ deck, overlay, onExit }) {
   const marqueeRef = useRef(null); // { canvasEl, startX, startY, moved } — the in-flight battlefield marquee-select, if any
   const suppressClickUntil = useRef(0); // Date.now() cutoff — swallows the ghost click a drag or long-press-flip leaves behind
   const deckTokens = deck.tokens || [];
+
+  // --card-scale is set inline (highest specificity a stylesheet can't
+  // easily out-rank) so it works the same whether the current breakpoint's
+  // base card size comes from the desktop rule or the landscape-mobile one.
+  useEffect(() => {
+    overlay.style.setProperty('--card-scale', cardScale);
+  }, [cardScale]);
+
+  const adjustCardScale = (delta) => {
+    const next = Math.round(Math.min(CARD_SCALE_MAX, Math.max(CARD_SCALE_MIN, cardScale + delta)) * 100) / 100;
+    setCardScale(next);
+    localStorage.setItem(CARD_SCALE_KEY, String(next));
+  };
 
   const commit = () => setState({ ...stateRef.current });
 
@@ -776,6 +799,7 @@ function App({ deck, overlay, onExit }) {
       else if (e.key === 'Control' && !e.repeat) { setHandCollapsed(v => !v); }
       else if (key === 'c') { setLeftColCollapsed(v => !v); }
       else if (key === 'b') { setBattlefieldFullscreen(v => !v); }
+      else if (key === 'm') { setState(resetGame(deck)); }
       else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); setSelectedUids(new Set()); setBattlefieldFullscreen(false); }
     };
     const onPopState = () => {
@@ -819,6 +843,11 @@ function App({ deck, overlay, onExit }) {
           <button onClick=${doAction(() => { stateRef.current.life--; })}>−</button>
           <strong>${state.life}</strong>
           <button onClick=${doAction(() => { stateRef.current.life++; })}>+</button>
+        </span>
+        <span class="playtest__stat" title="Card size">Cards
+          <button disabled=${cardScale <= CARD_SCALE_MIN} onClick=${() => adjustCardScale(-CARD_SCALE_STEP)}>−</button>
+          <strong>${Math.round(cardScale * 100)}%</strong>
+          <button disabled=${cardScale >= CARD_SCALE_MAX} onClick=${() => adjustCardScale(CARD_SCALE_STEP)}>+</button>
         </span>
         <div class=${`playtest__controls-extra${topbarCollapsed ? ' controls-collapsed' : ''}`}>
           <button class="btn" disabled=${!undoStack.current.length} onClick=${() => undo()}>↺ Undo</button>

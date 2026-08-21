@@ -42,6 +42,11 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
 
 ## Notes
 
+- A first-ever visit auto-imports a ready-made deck (Indominus Rex) via the
+  Archidekt pipeline above, so anyone trying the site — a friend testing the
+  playtester, say — has something to click Playtest on immediately without
+  bringing their own decklist. Delete it like any other deck; it's seeded
+  once, ever, and never comes back on its own.
 - Card data and images are pulled live from Scryfall's free API each time you
   import a deck, then cached in `localStorage` so re-opening a deck is instant.
 - "Refresh Card Data" on a deck re-fetches everything (useful if prices or
@@ -90,16 +95,19 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     full width to spread cards out in (Graveyard and Exile are stacked on
     top of each other rather than side by side, so they don't eat into the
     Hand's width either).
-  - Command Zone/Tokens and the whole top controls row are both
-    collapsible (◂/▸ toggle, or the C key for Command Zone) — useful once a
-    game's actually underway and the Battlefield is what matters. Control
-    now collapses Hand *and* the piles beside it together, for the same
-    reason. Collapsing shrinks those sections but doesn't hand their space
-    to the Battlefield (nothing here uses viewport-relative sizing) — for
-    that, press **B** to go fully fullscreen: everything except the
-    Battlefield itself disappears and the canvas fills the whole screen.
-    Press B again, Escape, or the small "Exit Fullscreen" button to go
-    back.
+  - Command Zone/Tokens and the whole top controls row are both collapsed
+    by default (◂/▸ toggle, or the C key for Command Zone) — the Battlefield
+    is what matters once a game's actually underway. Control collapses Hand
+    *and* the piles beside it together, for the same reason. Collapsing
+    shrinks those sections but doesn't hand their space to the Battlefield
+    (nothing here uses viewport-relative sizing) — for that, press **B** to
+    go fully fullscreen: everything except the Battlefield itself
+    disappears and the canvas fills the whole screen. Press B again,
+    Escape, or the small "Exit Fullscreen" button to go back.
+  - A "Cards" control next to Turn/Life scales every card on the board up
+    or down (50%–130%, defaults to 80%) — persisted, so it's a one-time
+    "make the Battlefield less cluttered" setting rather than something to
+    redo every game. **M** is a shortcut for Mulligan.
   - The Hand caps at ~2 rows and scrolls internally, so drawing a lot of
     cards doesn't push the rest of the board out of reach. Sort buttons
     (CMC / Type / Name) reorder it on demand, or drag cards to reorder

@@ -265,6 +265,35 @@ els.sidebarToggle.addEventListener('click', () => {
 els.mobileSidebarToggle.addEventListener('click', () => setSidebarCollapsed(false));
 els.sidebarBackdrop.addEventListener('click', () => setSidebarCollapsed(true));
 
+// A ready-made deck so a friend trying the playtester doesn't have to bring
+// their own — seeded once, ever, regardless of what happens to it after
+// (rename, edit, even delete) so deleting it is permanent, not "until next
+// visit". Runs after the normal deck-selection below so it never steals
+// focus from a deck a returning user already has open.
+const DEFAULT_DECK_URL = 'https://archidekt.com/decks/7404579/indominus_rex';
+const DEFAULT_DECK_SEEDED_KEY = 'edh_default_deck_seeded';
+
+async function ensureDefaultDeck() {
+  if (localStorage.getItem(DEFAULT_DECK_SEEDED_KEY) === '1') return;
+  try {
+    const { name, text } = await fetchArchidektDeck(DEFAULT_DECK_URL);
+    const { cards } = parseDecklist(text);
+    if (!cards.length) return;
+    const cardData = await fetchCardData(cards, {});
+    for (const c of cards) c.data = cardData[c.key] || null;
+    const tokenRefs = cards.flatMap(c => c.data?.tokenParts || []);
+    const tokens = tokenRefs.length ? await fetchTokenData(tokenRefs) : [];
+    upsertDeck(name, text, cards, tokens);
+    localStorage.setItem(DEFAULT_DECK_SEEDED_KEY, '1');
+    renderSidebar();
+    if (!currentDeckName) selectDeck(name);
+  } catch {
+    // Archidekt/proxy/Scryfall hiccup — skip quietly and try again next
+    // visit (the flag above is only set on success), the user can still
+    // import their own decks normally in the meantime.
+  }
+}
+
 // init
 applySidebarState();
 renderSidebar();
@@ -275,3 +304,4 @@ if (firstDeck) {
 } else {
   els.emptyState.classList.remove('hidden');
 }
+ensureDefaultDeck();
