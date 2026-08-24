@@ -334,7 +334,23 @@ html, body {
   gap: 8px;
 }
 .category-section h3 .count { color: var(--text-dim); font-size: 14px; font-weight: 400; }
+.category-value { margin-left: auto; color: var(--text-dim); font-size: 14px; font-weight: 400; }
 .category-curve { max-width: 420px; margin-bottom: 14px; }
+
+/* Tokens — FYI reference at the bottom of the page, deliberately styled
+   like a category-section but never fed into the stats above it. */
+.token-section { margin-top: 8px; }
+.token-section h3 {
+  font-size: 17px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.token-section h3 .count { color: var(--text-dim); font-size: 14px; font-weight: 400; }
+.card-tile--token { cursor: pointer; }
 
 .card-grid {
   display: grid;

@@ -70,8 +70,13 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   or its artifacts. The bar dims but stays put (and clickable) so it's easy
   to switch back; Category Breakdown and Card Types themselves always show
   every card, unaffected by the toggle.
-- Each category's card gallery shows a price under every card and has a
-  Sort control (Name / CMC / Price) that applies to every category at once.
+- Each category's card gallery shows a price under every card and its total
+  value next to the category name, and has a Sort control (Name / CMC /
+  Price) that applies to every category at once.
+- A Tokens section at the bottom of the page lists every token the deck can
+  create (same data the playtester's Tokens pile uses) as a quick reference
+  — purely informational, so it's never counted in Total Cards, the charts,
+  or Est. Value.
 - "Export" (next to the deck name) is for building a Cardmarket wantlist:
   it drops in a banner explaining the mode, and clicking a card marks it
   "already owned" (dimmed with a ✓) instead of opening it — owned cards are

@@ -181,6 +181,21 @@ function cardTile(c, ctx = {}) {
   </div>`;
 }
 
+// FYI reference only — these don't count toward Total Cards, the charts, or
+// Est. Value, since they're not cards you're buying or building around.
+function tokenTile(t) {
+  const d = t.data;
+  if (!d) return '';
+  const img = d.image_small || d.image;
+  const full = d.image || d.image_small;
+  return `<div class="card-cell">
+    <div class="card-tile card-tile--token" data-full="${escapeHtml(full)}" data-uri="${escapeHtml(d.scryfall_uri)}" data-name="${escapeHtml(t.name)}">
+      <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(t.name)}">
+    </div>
+    <div class="card-price">${escapeHtml(d.type_line || '')}</div>
+  </div>`;
+}
+
 const SORT_OPTIONS = [
   { key: 'name', label: 'Name', cmp: (a, b) => a.name.localeCompare(b.name) },
   { key: 'cmc', label: 'CMC', cmp: (a, b) => (a.data?.cmc ?? 0) - (b.data?.cmc ?? 0) || a.name.localeCompare(b.name) },
@@ -281,9 +296,11 @@ export function renderDeck(deck, root, { exportMode: initialExportMode = false }
         ${stats.categoryBreakdown.map(({ label: cat }) => {
           const cardsInCat = deck.cards.filter(c => c.category === cat).sort(sortOption.cmp);
           const curve = stats.categoryCurves.get(cat);
+          const categoryValue = cardsInCat.reduce((s, c) => s + (cardPriceEur(c) || 0) * c.qty, 0);
+          const hasCategoryPrice = cardsInCat.some(c => cardPriceEur(c) != null);
           return `
             <section class="category-section">
-              <h3>${escapeHtml(cat)} <span class="count">${cardsInCat.reduce((s, c) => s + c.qty, 0)}</span></h3>
+              <h3>${escapeHtml(cat)} <span class="count">${cardsInCat.reduce((s, c) => s + c.qty, 0)}</span>${hasCategoryPrice ? `<span class="category-value">${money(categoryValue)}</span>` : ''}</h3>
               ${curve ? `
                 <div class="category-curve">
                   ${barChart(curve, { width: 420, height: 110, color: categoryColor.get(cat) })}
@@ -295,6 +312,16 @@ export function renderDeck(deck, root, { exportMode: initialExportMode = false }
             </section>`;
         }).join('')}
       </div>
+
+      ${deck.tokens?.length ? `
+        <div class="token-section">
+          <h3>Tokens <span class="count">${deck.tokens.length}</span></h3>
+          <p class="chart-hint">Tokens this deck can create — for reference only, not counted in the stats above.</p>
+          <div class="card-grid">
+            ${deck.tokens.map(tokenTile).join('')}
+          </div>
+        </div>
+      ` : ''}
     `;
 
     if (exportMode) {
@@ -307,10 +334,16 @@ export function renderDeck(deck, root, { exportMode: initialExportMode = false }
         });
       });
     } else {
-      root.querySelectorAll('.card-tile[data-full]').forEach(tile => {
+      root.querySelectorAll('.card-tile[data-full]:not(.card-tile--token)').forEach(tile => {
         tile.addEventListener('click', () => openLightbox(tile.dataset));
       });
     }
+
+    // Tokens open the lightbox in every mode — they're not part of Export
+    // (no key/qty/price), so exportMode's toggle-owned wiring above skips them.
+    root.querySelectorAll('.card-tile--token[data-full]').forEach(tile => {
+      tile.addEventListener('click', () => openLightbox(tile.dataset));
+    });
 
     document.getElementById('export-toggle-btn')?.addEventListener('click', () => {
       exportMode = !exportMode;
