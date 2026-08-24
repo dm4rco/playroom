@@ -354,7 +354,7 @@ function App({ deck, overlay, onExit }) {
   const [state, setState] = useState(() => resetGame(deck));
   const [browsingZone, setBrowsingZoneState] = useState(null);
   const [showTips, setShowTips] = useState(false);
-  const [bottomRowPinned, setBottomRowPinned] = useState(false); // pins Hand/Library/Graveyard/Exile open — otherwise they peek and expand on hover/drag
+  const [bottomRowPinned, setBottomRowPinned] = useState(true); // pins Hand/Library/Graveyard/Exile open by default — a fresh board has room to spare; unpin once the Battlefield fills up and needs the space back
   const [leftColCollapsed, setLeftColCollapsed] = useState(true); // collapses Command Zone + Tokens — starts collapsed, Battlefield matters more
   const [topbarCollapsed, setTopbarCollapsed] = useState(true); // collapses the secondary controls row + hint (Turn/Life/Exit stay put) — starts collapsed
   const [battlefieldFullscreen, setBattlefieldFullscreen] = useState(false); // B — everything but the Battlefield disappears
