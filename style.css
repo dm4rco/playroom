@@ -267,15 +267,45 @@ html, body {
   max-width: 900px;
 }
 .chart-card h3 { margin: 0 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.chart-hint { margin: -6px 0 8px; font-size: 11px; color: var(--text-dim); font-style: italic; }
 .chart { width: 100%; height: auto; }
 .chart-label { fill: var(--text-dim); font-size: 13px; }
 .chart-value { fill: var(--text); font-size: 15px; font-weight: 700; }
+/* Category Breakdown / Card Types bars are clickable — toggling a bar
+   excludes/includes its cards in the Mana Curve & Color Pips (computeStats
+   handles the actual filtering; this just shows what's currently off). */
+.chart-bar-group--interactive { cursor: pointer; }
+.chart-bar-group--interactive rect:not(.chart-hit) { transition: opacity 0.1s ease; }
+.chart-bar-group--interactive:hover rect:not(.chart-hit) { opacity: 0.8; }
+.chart-bar-group--excluded rect:not(.chart-hit) { opacity: 0.22; }
+.chart-bar-group--excluded:hover rect:not(.chart-hit) { opacity: 0.4; }
+.chart-bar-group--excluded .chart-label,
+.chart-bar-group--excluded .chart-value { fill: var(--text-dim); }
 .donut-row { display: flex; align-items: center; gap: 16px; }
 .donut { width: 120px; height: 120px; flex-shrink: 0; }
 .legend { list-style: none; margin: 0; padding: 0; font-size: 14px; color: var(--text-dim); display: flex; flex-direction: column; gap: 8px; }
 .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
 
 /* Gallery */
+.gallery-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.gallery-sort__btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.gallery-sort__btn:hover { border-color: var(--accent); color: var(--text); }
+.gallery-sort__btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .category-section { margin-bottom: 28px; }
 .category-section h3 {
   font-size: 17px;
@@ -294,6 +324,8 @@ html, body {
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 10px;
 }
+
+.card-cell { display: flex; flex-direction: column; gap: 4px; }
 
 .card-tile {
   position: relative;
@@ -322,6 +354,7 @@ html, body {
 .card-tile__finish { right: 4px; color: #ffd76a; }
 .card-tile--missing { display: flex; align-items: center; justify-content: center; padding: 8px; }
 .card-tile__placeholder { font-size: 12px; color: var(--text-dim); text-align: center; }
+.card-price { font-size: 12px; color: var(--text-dim); text-align: center; }
 
 /* Lightbox */
 .lightbox {

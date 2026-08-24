@@ -14,7 +14,11 @@ export function paletteColor(i) {
   return PALETTE[i % PALETTE.length];
 }
 
-export function barChart(data, { width = 480, height = 220, color = '#7c5cff', colorFn } = {}) {
+// `interactive` (a string like 'category'/'type') makes every bar clickable
+// — render.js delegates a click listener that toggles the bar's label in
+// and out of an exclusion set, dimming it here via `excluded` and (in
+// computeStats) filtering it out of the Mana Curve/Color Pips downstream.
+export function barChart(data, { width = 480, height = 220, color = '#7c5cff', colorFn, interactive = null, excluded = null } = {}) {
   const sidePad = 30;
   const topPad = 30;
   const max = Math.max(1, ...data.map(d => d.value));
@@ -39,15 +43,26 @@ export function barChart(data, { width = 480, height = 220, color = '#7c5cff', c
     const label = rotateLabels
       ? `<text x="${labelX}" y="${labelY}" text-anchor="end" transform="rotate(-45 ${labelX} ${labelY})" class="chart-label">${escapeXml(d.label)}</text>`
       : `<text x="${labelX}" y="${labelY}" text-anchor="middle" class="chart-label">${escapeXml(d.label)}</text>`;
+    const isExcluded = excluded?.has(d.label);
+    const groupClass = interactive
+      ? `chart-bar-group chart-bar-group--interactive${isExcluded ? ' chart-bar-group--excluded' : ''}`
+      : 'chart-bar-group';
+    const groupAttrs = interactive ? ` data-kind="${escapeXml(interactive)}" data-label="${escapeXml(d.label)}"` : '';
+    // An invisible full-height rect widens the click target to the whole
+    // column (not just the visible bar, which can be a sliver near 0).
+    const hitRect = interactive
+      ? `<rect class="chart-hit" x="${x}" y="0" width="${barW}" height="${h}" fill="transparent" pointer-events="all"></rect>`
+      : '';
     return `
-      <g>
-        <rect x="${x + barW * 0.15}" y="${y}" width="${barW * 0.7}" height="${Math.max(barH, 1)}" rx="3" fill="${fill}"><title>${escapeXml(d.label)}: ${d.value}</title></rect>
+      <g class="${groupClass}"${groupAttrs}>
+        ${hitRect}
+        <rect x="${x + barW * 0.15}" y="${y}" width="${barW * 0.7}" height="${Math.max(barH, 1)}" rx="3" fill="${fill}"><title>${escapeXml(d.label)}: ${d.value}${interactive ? (isExcluded ? ' (excluded — click to include)' : ' (click to exclude from Mana Curve/Color Pips)') : ''}</title></rect>
         ${label}
         <text x="${labelX}" y="${y - 6}" text-anchor="middle" class="chart-value">${d.value}</text>
       </g>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${width} ${h}" class="chart" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${h}" class="chart${interactive ? ' chart--interactive' : ''}" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
 }
 
 export function donutChart(data, { size = 200, innerRatio = 0.55 } = {}) {

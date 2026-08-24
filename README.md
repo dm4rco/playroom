@@ -64,6 +64,14 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   adds noise) but still counts toward Total Cards, Unique, and Est. Value.
   Charts cap their own size instead of growing to fill the whole screen on
   large monitors — they add more columns instead.
+- Click a bar in Category Breakdown or Card Types to exclude it from the
+  Mana Curve and Color Pips above (and Avg CMC, which is curve-derived) —
+  handy for seeing how the deck would look without, say, its removal suite
+  or its artifacts. The bar dims but stays put (and clickable) so it's easy
+  to switch back; Category Breakdown and Card Types themselves always show
+  every card, unaffected by the toggle.
+- Each category's card gallery shows a price under every card and has a
+  Sort control (Name / CMC / Price) that applies to every category at once.
 - The "Playtest" button (top right, once a deck is loaded) opens a simple
   goldfishing sandbox with Library (split into Top/Bottom drop targets),
   Hand, Battlefield, Graveyard, Exile, and Tokens zones, plus a Command Zone

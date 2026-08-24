@@ -44,7 +44,7 @@ function money(n) {
   return n == null ? null : `€${n.toFixed(2)}`;
 }
 
-export function computeStats(cards) {
+export function computeStats(cards, { excludedCategories = new Set(), excludedTypes = new Set() } = {}) {
   const totalCards = cards.reduce((s, c) => s + c.qty, 0);
   const uniqueCards = cards.length;
 
@@ -60,7 +60,14 @@ export function computeStats(cards) {
   const nonCommanderCards = cards.filter(c => !c.isCommander);
   const withData = nonCommanderCards.filter(c => c.data && !c.data.notFound);
 
-  const nonland = withData.filter(c => primaryType(c.data.type_line) !== 'Land');
+  // Cards actually contributing to the Mana Curve / Color Pips below —
+  // clicking a bar in Category Breakdown or Card Types toggles its cards
+  // in and out here so you can see how removing a category/type would
+  // shift the curve, without those two breakdown charts themselves (which
+  // always show the full deck) changing shape.
+  const activeWithData = withData.filter(c => !excludedCategories.has(c.category) && !excludedTypes.has(primaryType(c.data.type_line)));
+
+  const nonland = activeWithData.filter(c => primaryType(c.data.type_line) !== 'Land');
   const nonlandQty = nonland.reduce((s, c) => s + c.qty, 0);
   const avgCmc = nonlandQty
     ? nonland.reduce((s, c) => s + c.data.cmc * c.qty, 0) / nonlandQty
@@ -74,7 +81,7 @@ export function computeStats(cards) {
   const manaCurve = CURVE_ORDER.map(b => ({ label: b, value: curveMap.get(b) || 0 }));
 
   const pipMap = new Map();
-  for (const c of withData) {
+  for (const c of activeWithData) {
     const counts = pipCounts(c.data.mana_cost || '');
     for (const [color, n] of Object.entries(counts)) {
       pipMap.set(color, (pipMap.get(color) || 0) + n * c.qty);
@@ -133,96 +140,143 @@ function escapeHtml(s) {
 function cardTile(c) {
   const data = c.data;
   if (!data || data.notFound) {
-    return `<div class="card-tile card-tile--missing" title="Not found on Scryfall: ${escapeHtml(c.name)}">
-      <div class="card-tile__placeholder">${escapeHtml(c.name)}</div>
+    return `<div class="card-cell">
+      <div class="card-tile card-tile--missing" title="Not found on Scryfall: ${escapeHtml(c.name)}">
+        <div class="card-tile__placeholder">${escapeHtml(c.name)}</div>
+      </div>
     </div>`;
   }
   const img = data.image_small || data.image;
   const full = data.image || data.image_small;
   const price = cardPriceEur(c);
-  return `<div class="card-tile" data-full="${escapeHtml(full)}" data-uri="${escapeHtml(data.scryfall_uri)}" data-name="${escapeHtml(data.name)}" data-price="${price != null ? escapeHtml(money(price)) : ''}">
-    ${c.qty > 1 ? `<span class="card-tile__qty">${c.qty}x</span>` : ''}
-    ${c.finish ? `<span class="card-tile__finish">${c.finish}</span>` : ''}
-    <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(data.name)}">
+  const priceLabel = price != null ? money(price) : '—';
+  return `<div class="card-cell">
+    <div class="card-tile" data-full="${escapeHtml(full)}" data-uri="${escapeHtml(data.scryfall_uri)}" data-name="${escapeHtml(data.name)}" data-price="${price != null ? escapeHtml(money(price)) : ''}">
+      ${c.qty > 1 ? `<span class="card-tile__qty">${c.qty}x</span>` : ''}
+      ${c.finish ? `<span class="card-tile__finish">${c.finish}</span>` : ''}
+      <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(data.name)}">
+    </div>
+    <div class="card-price">${priceLabel}</div>
   </div>`;
 }
 
+const SORT_OPTIONS = [
+  { key: 'name', label: 'Name', cmp: (a, b) => a.name.localeCompare(b.name) },
+  { key: 'cmc', label: 'CMC', cmp: (a, b) => (a.data?.cmc ?? 0) - (b.data?.cmc ?? 0) || a.name.localeCompare(b.name) },
+  // Highest value first — missing price data sorts to the end either way.
+  { key: 'price', label: 'Price', cmp: (a, b) => (cardPriceEur(b) ?? -1) - (cardPriceEur(a) ?? -1) || a.name.localeCompare(b.name) },
+];
+
 export function renderDeck(deck, root) {
-  const stats = computeStats(deck.cards);
-  const commanderData = stats.commander?.data;
-  const categoryColor = new Map(stats.categoryBreakdown.map((d, i) => [d.label, paletteColor(i)]));
+  // Clicking a Category Breakdown/Card Types bar toggles its cards out of
+  // the Mana Curve/Color Pips below (see computeStats), so you can see how
+  // dropping a category or type would shift the curve without actually
+  // editing the decklist. Local to this render — switching decks resets it.
+  const excludedCategories = new Set();
+  const excludedTypes = new Set();
+  let gallerySort = 'name';
 
-  root.innerHTML = `
-    <div class="deck-header">
-      ${commanderData && !commanderData.notFound ? `
-        <img class="commander-art" src="${escapeHtml(commanderData.image_small || commanderData.image)}" alt="${escapeHtml(commanderData.name)}">
+  const draw = () => {
+    const stats = computeStats(deck.cards, { excludedCategories, excludedTypes });
+    const commanderData = stats.commander?.data;
+    const categoryColor = new Map(stats.categoryBreakdown.map((d, i) => [d.label, paletteColor(i)]));
+    const sortOption = SORT_OPTIONS.find(o => o.key === gallerySort);
+
+    root.innerHTML = `
+      <div class="deck-header">
+        ${commanderData && !commanderData.notFound ? `
+          <img class="commander-art" src="${escapeHtml(commanderData.image_small || commanderData.image)}" alt="${escapeHtml(commanderData.name)}">
+        ` : ''}
+        <div class="deck-header__info">
+          <h2>${escapeHtml(deck.name)}</h2>
+          ${commanderData ? `<div class="commander-name">Commander: ${escapeHtml(commanderData.name)}</div>` : ''}
+          <div class="deck-header__stats">
+            <div class="stat"><span class="stat__value">${stats.totalCards}</span><span class="stat__label">Total Cards</span></div>
+            <div class="stat"><span class="stat__value">${stats.uniqueCards}</span><span class="stat__label">Unique</span></div>
+            <div class="stat"><span class="stat__value">${stats.avgCmc.toFixed(2)}</span><span class="stat__label">Avg CMC</span></div>
+            <div class="stat"><span class="stat__value">${money(stats.totalPrice) ?? '—'}</span><span class="stat__label">Est. Value (Cardmarket)</span></div>
+          </div>
+        </div>
+      </div>
+
+      ${stats.notFound.length ? `
+        <div class="warning-box">
+          ${stats.notFound.length} card(s) not found on Scryfall: ${stats.notFound.map(c => escapeHtml(c.name)).join(', ')}
+        </div>
       ` : ''}
-      <div class="deck-header__info">
-        <h2>${escapeHtml(deck.name)}</h2>
-        ${commanderData ? `<div class="commander-name">Commander: ${escapeHtml(commanderData.name)}</div>` : ''}
-        <div class="deck-header__stats">
-          <div class="stat"><span class="stat__value">${stats.totalCards}</span><span class="stat__label">Total Cards</span></div>
-          <div class="stat"><span class="stat__value">${stats.uniqueCards}</span><span class="stat__label">Unique</span></div>
-          <div class="stat"><span class="stat__value">${stats.avgCmc.toFixed(2)}</span><span class="stat__label">Avg CMC</span></div>
-          <div class="stat"><span class="stat__value">${money(stats.totalPrice) ?? '—'}</span><span class="stat__label">Est. Value (Cardmarket)</span></div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Mana Curve</h3>
+          ${barChart(stats.manaCurve, { color: '#7c5cff' })}
+        </div>
+        <div class="chart-card">
+          <h3>Color Pips</h3>
+          <div class="donut-row">
+            ${donutChart(stats.colorPips)}
+            <ul class="legend">
+              ${stats.colorPips.map(d => `<li><span class="swatch" style="background:${d.color}"></span>${d.label} (${d.value})</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+        <div class="chart-card${stats.categoryBreakdown.length > 5 ? ' chart-card--wide' : ''}">
+          <h3>Category Breakdown</h3>
+          <p class="chart-hint">Click a bar to exclude/include it in the Mana Curve &amp; Color Pips above.</p>
+          ${barChart(stats.categoryBreakdown, { colorFn: (d) => categoryColor.get(d.label), interactive: 'category', excluded: excludedCategories })}
+        </div>
+        <div class="chart-card${stats.typeBreakdown.length > 5 ? ' chart-card--wide' : ''}">
+          <h3>Card Types</h3>
+          <p class="chart-hint">Click a bar to exclude/include it in the Mana Curve &amp; Color Pips above.</p>
+          ${barChart(stats.typeBreakdown, { colorFn: (_, i) => paletteColor(i + 3), interactive: 'type', excluded: excludedTypes })}
         </div>
       </div>
-    </div>
 
-    ${stats.notFound.length ? `
-      <div class="warning-box">
-        ${stats.notFound.length} card(s) not found on Scryfall: ${stats.notFound.map(c => escapeHtml(c.name)).join(', ')}
-      </div>
-    ` : ''}
-
-    <div class="charts-grid">
-      <div class="chart-card">
-        <h3>Mana Curve</h3>
-        ${barChart(stats.manaCurve, { color: '#7c5cff' })}
-      </div>
-      <div class="chart-card">
-        <h3>Color Pips</h3>
-        <div class="donut-row">
-          ${donutChart(stats.colorPips)}
-          <ul class="legend">
-            ${stats.colorPips.map(d => `<li><span class="swatch" style="background:${d.color}"></span>${d.label} (${d.value})</li>`).join('')}
-          </ul>
+      <div class="gallery">
+        <div class="gallery-sort">
+          Sort:
+          ${SORT_OPTIONS.map(o => `<button class="gallery-sort__btn${o.key === gallerySort ? ' active' : ''}" data-sort="${o.key}">${o.label}</button>`).join('')}
         </div>
-      </div>
-      <div class="chart-card${stats.categoryBreakdown.length > 5 ? ' chart-card--wide' : ''}">
-        <h3>Category Breakdown</h3>
-        ${barChart(stats.categoryBreakdown, { colorFn: (d) => categoryColor.get(d.label) })}
-      </div>
-      <div class="chart-card${stats.typeBreakdown.length > 5 ? ' chart-card--wide' : ''}">
-        <h3>Card Types</h3>
-        ${barChart(stats.typeBreakdown, { colorFn: (_, i) => paletteColor(i + 3) })}
-      </div>
-    </div>
-
-    <div class="gallery">
-      ${stats.categoryBreakdown.map(({ label: cat }) => {
-        const cardsInCat = deck.cards.filter(c => c.category === cat)
-          .sort((a, b) => a.name.localeCompare(b.name));
-        const curve = stats.categoryCurves.get(cat);
-        return `
-          <section class="category-section">
-            <h3>${escapeHtml(cat)} <span class="count">${cardsInCat.reduce((s, c) => s + c.qty, 0)}</span></h3>
-            ${curve ? `
-              <div class="category-curve">
-                ${barChart(curve, { width: 420, height: 110, color: categoryColor.get(cat) })}
+        ${stats.categoryBreakdown.map(({ label: cat }) => {
+          const cardsInCat = deck.cards.filter(c => c.category === cat).sort(sortOption.cmp);
+          const curve = stats.categoryCurves.get(cat);
+          return `
+            <section class="category-section">
+              <h3>${escapeHtml(cat)} <span class="count">${cardsInCat.reduce((s, c) => s + c.qty, 0)}</span></h3>
+              ${curve ? `
+                <div class="category-curve">
+                  ${barChart(curve, { width: 420, height: 110, color: categoryColor.get(cat) })}
+                </div>
+              ` : ''}
+              <div class="card-grid">
+                ${cardsInCat.map(cardTile).join('')}
               </div>
-            ` : ''}
-            <div class="card-grid">
-              ${cardsInCat.map(cardTile).join('')}
-            </div>
-          </section>`;
-      }).join('')}
-    </div>
-  `;
+            </section>`;
+        }).join('')}
+      </div>
+    `;
 
-  root.querySelectorAll('.card-tile[data-full]').forEach(tile => {
-    tile.addEventListener('click', () => openLightbox(tile.dataset));
-  });
+    root.querySelectorAll('.card-tile[data-full]').forEach(tile => {
+      tile.addEventListener('click', () => openLightbox(tile.dataset));
+    });
+
+    root.querySelectorAll('.chart-bar-group--interactive[data-label]').forEach(g => {
+      g.addEventListener('click', () => {
+        const set = g.dataset.kind === 'category' ? excludedCategories : excludedTypes;
+        const label = g.dataset.label;
+        if (set.has(label)) set.delete(label); else set.add(label);
+        draw();
+      });
+    });
+
+    root.querySelectorAll('.gallery-sort__btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        gallerySort = btn.dataset.sort;
+        draw();
+      });
+    });
+  };
+
+  draw();
 }
 
 export function openLightbox({ full, uri, name, price }) {
