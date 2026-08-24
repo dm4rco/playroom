@@ -76,7 +76,8 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
 - A Tokens section at the bottom of the page lists every token the deck can
   create (same data the playtester's Tokens pile uses) as a quick reference
   — purely informational, so it's never counted in Total Cards, the charts,
-  or Est. Value.
+  or Est. Value. Click a token to see which card(s) in the deck actually
+  make it, with each one's category and price.
 - "Export" (next to the deck name) is for building a Cardmarket wantlist:
   it drops in a banner explaining the mode, and clicking a card marks it
   "already owned" (dimmed with a ✓) instead of opening it — owned cards are

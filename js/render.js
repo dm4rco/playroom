@@ -315,8 +315,7 @@ export function renderDeck(deck, root, { exportMode: initialExportMode = false }
 
       ${deck.tokens?.length ? `
         <div class="token-section">
-          <h3>Tokens <span class="count">${deck.tokens.length}</span></h3>
-          <p class="chart-hint">Tokens this deck can create — for reference only, not counted in the stats above.</p>
+          <h3>Tokens this deck can create</h3>
           <div class="card-grid">
             ${deck.tokens.map(tokenTile).join('')}
           </div>
@@ -339,10 +338,17 @@ export function renderDeck(deck, root, { exportMode: initialExportMode = false }
       });
     }
 
-    // Tokens open the lightbox in every mode — they're not part of Export
-    // (no key/qty/price), so exportMode's toggle-owned wiring above skips them.
+    // Tokens open their own lightbox (with a list of the cards that make
+    // them) in every mode — they're not part of Export (no key/qty/price),
+    // so exportMode's toggle-owned wiring above skips them.
     root.querySelectorAll('.card-tile--token[data-full]').forEach(tile => {
-      tile.addEventListener('click', () => openLightbox(tile.dataset));
+      tile.addEventListener('click', () => {
+        const tokenName = tile.dataset.name;
+        const sourceCards = deck.cards
+          .filter(c => c.data?.tokenParts?.some(tp => tp.name === tokenName))
+          .sort((a, b) => (a.data?.name || a.name).localeCompare(b.data?.name || b.name));
+        openTokenLightbox(tile.dataset, sourceCards);
+      });
     });
 
     document.getElementById('export-toggle-btn')?.addEventListener('click', () => {
@@ -388,7 +394,7 @@ export function renderDeck(deck, root, { exportMode: initialExportMode = false }
   draw();
 }
 
-export function openLightbox({ full, uri, name, price }) {
+function ensureLightboxEl() {
   let modal = document.getElementById('lightbox');
   if (!modal) {
     modal = document.createElement('div');
@@ -397,6 +403,11 @@ export function openLightbox({ full, uri, name, price }) {
     modal.addEventListener('click', () => modal.classList.remove('open'));
     document.body.appendChild(modal);
   }
+  return modal;
+}
+
+export function openLightbox({ full, uri, name, price }) {
+  const modal = ensureLightboxEl();
   modal.innerHTML = `
     <div class="lightbox__content">
       <img src="${escapeHtml(full)}" alt="${escapeHtml(name)}">
@@ -404,6 +415,35 @@ export function openLightbox({ full, uri, name, price }) {
         <strong>${escapeHtml(name)}</strong>
         ${price ? `<span>${escapeHtml(price)}</span>` : ''}
         ${uri ? `<a href="${escapeHtml(uri)}" target="_blank" rel="noopener">View on Scryfall</a>` : ''}
+      </div>
+    </div>`;
+  modal.classList.add('open');
+}
+
+// Same modal, but for a token: alongside the token itself, lists every card
+// in the deck that can actually create it (with each one's category and
+// price), since that's the useful question when looking at a token here.
+export function openTokenLightbox({ full, uri, name }, sourceCards) {
+  const modal = ensureLightboxEl();
+  const rows = sourceCards.map(c => {
+    const label = c.data?.name || c.name;
+    const price = cardPriceEur(c);
+    return `<li>
+      <span class="token-sources__name">${escapeHtml(label)}</span>
+      <span class="token-sources__category">${escapeHtml(c.category)}</span>
+      <span class="token-sources__price">${price != null ? escapeHtml(money(price)) : '—'}</span>
+    </li>`;
+  }).join('');
+  modal.innerHTML = `
+    <div class="lightbox__content lightbox__content--token">
+      <img src="${escapeHtml(full)}" alt="${escapeHtml(name)}">
+      <div class="lightbox__meta">
+        <strong>${escapeHtml(name)}</strong>
+        ${uri ? `<a href="${escapeHtml(uri)}" target="_blank" rel="noopener">View on Scryfall</a>` : ''}
+      </div>
+      <div class="token-sources">
+        <h4>Made by ${sourceCards.length} card${sourceCards.length === 1 ? '' : 's'}</h4>
+        ${rows ? `<ul>${rows}</ul>` : `<p class="token-sources__empty">No cards in this deck reference it directly (added manually, or via a generic "create a token" effect).</p>`}
       </div>
     </div>`;
   modal.classList.add('open');
