@@ -223,7 +223,8 @@ html, body {
   border-radius: 8px;
   border: 1px solid var(--border);
 }
-.deck-header__info h2 { margin: 0 0 4px; }
+.deck-header__info h2 { margin: 0; }
+.deck-header__title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
 .commander-name { color: var(--text-dim); font-size: 14px; margin-bottom: 10px; }
 .deck-header__stats { display: flex; gap: 24px; }
 .stat { display: flex; flex-direction: column; }
@@ -239,6 +240,22 @@ html, body {
   font-size: 14px;
   margin-bottom: 20px;
 }
+
+/* Export mode — click-to-mark-owned banner and controls. */
+.export-banner {
+  background: rgba(124, 92, 255, 0.1);
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.export-banner p { margin: 0; font-size: 13px; color: var(--text-dim); flex: 1; min-width: 240px; }
+.export-banner p strong { color: var(--text); }
+.export-banner__actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* Charts */
 .charts-grid {
@@ -355,6 +372,26 @@ html, body {
 .card-tile--missing { display: flex; align-items: center; justify-content: center; padding: 8px; }
 .card-tile__placeholder { font-size: 12px; color: var(--text-dim); text-align: center; }
 .card-price { font-size: 12px; color: var(--text-dim); text-align: center; }
+
+/* Export mode — clicking toggles "owned" instead of opening the lightbox. */
+.card-tile--export:hover { border-color: var(--accent); }
+.card-tile--owned { opacity: 0.4; }
+.card-tile--owned:hover { opacity: 0.6; }
+.card-tile__owned-badge {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #6ee787;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+}
+.card-tile__owned-badge:empty { display: none; background: none; }
 
 /* Lightbox */
 .lightbox {

@@ -44,6 +44,21 @@ function money(n) {
   return n == null ? null : `€${n.toFixed(2)}`;
 }
 
+// "Owned" marks made in Export mode — keyed by set:collector (c.key, stable
+// across re-renders) rather than stored on the card objects themselves, so
+// a decklist re-import/refresh can't silently wipe them. Per deck name, so
+// switching decks doesn't bleed one deck's marks into another's.
+const OWNED_KEY_PREFIX = 'edh_owned_';
+
+function loadOwnedKeys(deckName) {
+  try { return new Set(JSON.parse(localStorage.getItem(OWNED_KEY_PREFIX + deckName)) || []); }
+  catch { return new Set(); }
+}
+
+function saveOwnedKeys(deckName, keys) {
+  localStorage.setItem(OWNED_KEY_PREFIX + deckName, JSON.stringify([...keys]));
+}
+
 export function computeStats(cards, { excludedCategories = new Set(), excludedTypes = new Set() } = {}) {
   const totalCards = cards.reduce((s, c) => s + c.qty, 0);
   const uniqueCards = cards.length;
@@ -137,11 +152,16 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function cardTile(c) {
+function cardTile(c, ctx = {}) {
   const data = c.data;
+  const owned = ctx.exportMode && ctx.ownedKeys.has(c.key);
+  const tileClass = `card-tile${ctx.exportMode ? ' card-tile--export' : ''}${owned ? ' card-tile--owned' : ''}`;
+  const ownedBadge = ctx.exportMode ? `<span class="card-tile__owned-badge">${owned ? '✓ Owned' : ''}</span>` : '';
+
   if (!data || data.notFound) {
     return `<div class="card-cell">
-      <div class="card-tile card-tile--missing" title="Not found on Scryfall: ${escapeHtml(c.name)}">
+      <div class="${tileClass} card-tile--missing" data-key="${escapeHtml(c.key)}" title="Not found on Scryfall: ${escapeHtml(c.name)}">
+        ${ownedBadge}
         <div class="card-tile__placeholder">${escapeHtml(c.name)}</div>
       </div>
     </div>`;
@@ -151,9 +171,10 @@ function cardTile(c) {
   const price = cardPriceEur(c);
   const priceLabel = price != null ? money(price) : '—';
   return `<div class="card-cell">
-    <div class="card-tile" data-full="${escapeHtml(full)}" data-uri="${escapeHtml(data.scryfall_uri)}" data-name="${escapeHtml(data.name)}" data-price="${price != null ? escapeHtml(money(price)) : ''}">
+    <div class="${tileClass}" data-key="${escapeHtml(c.key)}" data-full="${escapeHtml(full)}" data-uri="${escapeHtml(data.scryfall_uri)}" data-name="${escapeHtml(data.name)}" data-price="${price != null ? escapeHtml(money(price)) : ''}">
       ${c.qty > 1 ? `<span class="card-tile__qty">${c.qty}x</span>` : ''}
       ${c.finish ? `<span class="card-tile__finish">${c.finish}</span>` : ''}
+      ${ownedBadge}
       <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(data.name)}">
     </div>
     <div class="card-price">${priceLabel}</div>
@@ -167,7 +188,7 @@ const SORT_OPTIONS = [
   { key: 'price', label: 'Price', cmp: (a, b) => (cardPriceEur(b) ?? -1) - (cardPriceEur(a) ?? -1) || a.name.localeCompare(b.name) },
 ];
 
-export function renderDeck(deck, root) {
+export function renderDeck(deck, root, { exportMode: initialExportMode = false } = {}) {
   // Clicking a Category Breakdown/Card Types bar toggles its cards out of
   // the Mana Curve/Color Pips below (see computeStats), so you can see how
   // dropping a category or type would shift the curve without actually
@@ -175,12 +196,18 @@ export function renderDeck(deck, root) {
   const excludedCategories = new Set();
   const excludedTypes = new Set();
   let gallerySort = 'name';
+  // Export mode: clicking a card marks it "already owned" instead of
+  // opening the lightbox. ownedKeys persists (see loadOwnedKeys) so marks
+  // survive leaving and re-entering export mode, or reloading the page.
+  let exportMode = initialExportMode;
+  const ownedKeys = loadOwnedKeys(deck.name);
 
   const draw = () => {
     const stats = computeStats(deck.cards, { excludedCategories, excludedTypes });
     const commanderData = stats.commander?.data;
     const categoryColor = new Map(stats.categoryBreakdown.map((d, i) => [d.label, paletteColor(i)]));
     const sortOption = SORT_OPTIONS.find(o => o.key === gallerySort);
+    const missingCards = deck.cards.filter(c => !ownedKeys.has(c.key));
 
     root.innerHTML = `
       <div class="deck-header">
@@ -188,7 +215,10 @@ export function renderDeck(deck, root) {
           <img class="commander-art" src="${escapeHtml(commanderData.image_small || commanderData.image)}" alt="${escapeHtml(commanderData.name)}">
         ` : ''}
         <div class="deck-header__info">
-          <h2>${escapeHtml(deck.name)}</h2>
+          <div class="deck-header__title-row">
+            <h2>${escapeHtml(deck.name)}</h2>
+            <button class="btn" id="export-toggle-btn">${exportMode ? 'Exit Export' : 'Export'}</button>
+          </div>
           ${commanderData ? `<div class="commander-name">Commander: ${escapeHtml(commanderData.name)}</div>` : ''}
           <div class="deck-header__stats">
             <div class="stat"><span class="stat__value">${stats.totalCards}</span><span class="stat__label">Total Cards</span></div>
@@ -198,6 +228,18 @@ export function renderDeck(deck, root) {
           </div>
         </div>
       </div>
+
+      ${exportMode ? `
+        <div class="export-banner">
+          <p><strong>Export mode:</strong> click a card below to mark it as one you already own —
+            owned cards are shown dimmed with a ✓ and left out of the export. Everything else stays
+            playable here as normal; this only affects what gets copied.</p>
+          <div class="export-banner__actions">
+            <button class="btn btn--primary" id="export-copy-btn">Copy Wantlist (${missingCards.length} card${missingCards.length === 1 ? '' : 's'})</button>
+            <button class="btn" id="export-done-btn">Done</button>
+          </div>
+        </div>
+      ` : ''}
 
       ${stats.notFound.length ? `
         <div class="warning-box">
@@ -248,15 +290,49 @@ export function renderDeck(deck, root) {
                 </div>
               ` : ''}
               <div class="card-grid">
-                ${cardsInCat.map(cardTile).join('')}
+                ${cardsInCat.map(c => cardTile(c, { exportMode, ownedKeys })).join('')}
               </div>
             </section>`;
         }).join('')}
       </div>
     `;
 
-    root.querySelectorAll('.card-tile[data-full]').forEach(tile => {
-      tile.addEventListener('click', () => openLightbox(tile.dataset));
+    if (exportMode) {
+      root.querySelectorAll('.card-tile[data-key]').forEach(tile => {
+        tile.addEventListener('click', () => {
+          const key = tile.dataset.key;
+          if (ownedKeys.has(key)) ownedKeys.delete(key); else ownedKeys.add(key);
+          saveOwnedKeys(deck.name, ownedKeys);
+          draw();
+        });
+      });
+    } else {
+      root.querySelectorAll('.card-tile[data-full]').forEach(tile => {
+        tile.addEventListener('click', () => openLightbox(tile.dataset));
+      });
+    }
+
+    document.getElementById('export-toggle-btn')?.addEventListener('click', () => {
+      exportMode = !exportMode;
+      draw();
+    });
+
+    document.getElementById('export-done-btn')?.addEventListener('click', () => {
+      exportMode = false;
+      draw();
+    });
+
+    document.getElementById('export-copy-btn')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const text = missingCards.map(c => `${c.qty}x ${c.data?.name || c.name}`).join('\n');
+      const original = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = 'Copied to clipboard!';
+      } catch {
+        btn.textContent = 'Copy failed — select & copy manually';
+      }
+      setTimeout(() => { btn.textContent = original; }, 1800);
     });
 
     root.querySelectorAll('.chart-bar-group--interactive[data-label]').forEach(g => {

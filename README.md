@@ -72,6 +72,15 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   every card, unaffected by the toggle.
 - Each category's card gallery shows a price under every card and has a
   Sort control (Name / CMC / Price) that applies to every category at once.
+- "Export" (next to the deck name) is for building a Cardmarket wantlist:
+  it drops in a banner explaining the mode, and clicking a card marks it
+  "already owned" (dimmed with a ✓) instead of opening it — owned cards are
+  left out of the copy. "Copy Wantlist" copies the rest to your clipboard as
+  plain `2x Name` lines, one per card, ready to paste into a Cardmarket
+  wantlist. Everything else (playing, browsing, the lightbox) still works
+  normally while export mode is on; "Done" just turns the click-to-mark
+  behavior back off. Owned marks are saved per deck and stick around even
+  after leaving export mode or reloading the page.
 - The "Playtest" button (top right, once a deck is loaded) opens a simple
   goldfishing sandbox with Library (split into Top/Bottom drop targets),
   Hand, Battlefield, Graveyard, Exile, and Tokens zones, plus a Command Zone
