@@ -1140,8 +1140,16 @@ html, body {
 /* Dashed line splitting the Battlefield into a bottom lane for lands and
    the rest of the canvas for everything else — clicking a card to play it
    (rather than dragging) lands it in the matching lane by default (see
-   getBattlefieldLaneSplit/nextCascadePosition in playtest.js), but nothing
-   stops a card from being dragged anywhere regardless of the line. */
+   getBattlefieldLaneMetrics/nextCascadePosition in playtest.js), but
+   nothing stops a card from being dragged anywhere regardless of the
+   line. Sized to the actual card height (not a fixed %) so the lane can
+   always fit one card at any canvas size — a fixed % can't: at a short
+   canvas a card can be 30%+ of its height, at a tall one just a few
+   percent. Because it's tied to card size, this line's position moves
+   whenever the canvas resizes; playtest.js has a ResizeObserver that
+   re-clamps any already-placed land that ends up on the wrong side of it
+   afterward (e.g. from the Hand peeking open, which is pure CSS and
+   otherwise invisible to it). */
 .playtest__battlefield-laneline {
   position: absolute;
   left: 6px;

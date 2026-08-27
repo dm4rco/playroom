@@ -148,6 +148,7 @@ const CARD_SCALE_STEP = 0.1;
 const CARD_SCALE_MIN = 0.5;
 const CARD_SCALE_MAX = 1.3;
 const CARD_SCALE_DEFAULT = 0.8; // a bit smaller out of the box — the Battlefield reads as cluttered at full size once it has more than a few cards
+const BATTLEFIELD_LANE_SPLIT_Y = 78; // % from the top — fallback only, for the rare tick before the canvas exists to measure (see getBattlefieldLaneMetrics)
 
 // Short and worth actually memorizing — everything else (click to play,
 // drag to move, etc.) is discoverable on its own and doesn't need a tip.
@@ -507,16 +508,22 @@ function App({ deck, overlay, onExit }) {
 
   // Y position (in % of the canvas) of the dashed lands/permanents lane
   // line, and the card's own half-height (also in %) — both live-measured
-  // so they track the actual card size and whatever height the canvas
-  // currently has (it's flex-sized against the rest of the board, see
-  // style.css). splitY matches the CSS line's own
-  // bottom:calc(var(--card-bf) + 20px) so click-to-play landings agree
-  // with where the line is actually drawn; marginYPct is what keeps a
-  // land's card (positioned by its center) fully clear of the line
-  // instead of straddling it.
+  // so the line is always sized to actually fit one card (a fixed % can't:
+  // at a short canvas a card can be 30%+ of its height, at a tall one just
+  // a few percent, so no single % works at both). splitY matches the CSS
+  // line's own bottom:calc(var(--card-bf) + 20px) so click-to-play
+  // landings agree with where the line is actually drawn; marginYPct is
+  // what keeps a land's card (positioned by its center) fully clear of
+  // the line instead of straddling it. Because this is measured fresh
+  // every time, splitY itself moves whenever the canvas resizes (hand
+  // peeking open/closed, card-scale changes, entering/leaving fullscreen)
+  // — see the ResizeObserver effect below, which re-clamps any
+  // already-placed land that ends up on the wrong side of the *new* line
+  // after one of those, since nothing here otherwise notices a plain
+  // hover-driven CSS resize.
   const getBattlefieldLaneMetrics = () => {
     const canvas = document.querySelector('.playtest__battlefield-canvas');
-    const fallback = { splitY: 80, marginYPct: 8 };
+    const fallback = { splitY: BATTLEFIELD_LANE_SPLIT_Y, marginYPct: 8 };
     if (!canvas) return fallback;
     const rect = canvas.getBoundingClientRect();
     if (!rect.height) return fallback;
@@ -533,6 +540,33 @@ function App({ deck, overlay, onExit }) {
     const { splitY, marginYPct } = getBattlefieldLaneMetrics();
     return { laneSplitY: splitY, laneMarginYPct: marginYPct };
   };
+
+  // Keeps already-placed lands below the line even though the line itself
+  // is live-measured (see above) and so moves whenever the canvas resizes
+  // — a ResizeObserver on the canvas catches every trigger uniformly,
+  // including a hand hover-peek/expand, which is pure CSS and otherwise
+  // invisible to this component entirely. Only nudges lands that actually
+  // ended up on the wrong side; never touches anything else, and isn't
+  // pushed to undo history since it's a passive correction, not a
+  // deliberate action.
+  useEffect(() => {
+    const canvas = document.querySelector('.playtest__battlefield-canvas');
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const { splitY, marginYPct } = getBattlefieldLaneMetrics();
+      const safeTop = Math.min(100 - marginYPct, splitY + marginYPct + 2);
+      let changed = false;
+      stateRef.current.battlefield.forEach(c => {
+        if (c.x != null && isLandCard(c) && c.y < safeTop) {
+          c.y = safeTop;
+          changed = true;
+        }
+      });
+      if (changed) setState({ ...stateRef.current });
+    });
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [battlefieldFullscreen]);
 
   // Hovering shows the full-size preview (see CardTile/TokenTile), so a
   // click's only job is the zone's primary action — no double-click
