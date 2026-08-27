@@ -45,7 +45,7 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
 
 ## Notes
 
-- A first-ever visit auto-imports a ready-made deck (Indominus Rex) via the
+- A first-ever visit auto-imports a ready-made deck (Ur-Dragon) via the
   Archidekt pipeline above, so anyone trying the site — a friend testing the
   playtester, say — has something to click Playtest on immediately without
   bringing their own decklist. Delete it like any other deck; it's seeded

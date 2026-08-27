@@ -296,7 +296,7 @@ els.sidebarBackdrop.addEventListener('click', () => setSidebarCollapsed(true));
 // (rename, edit, even delete) so deleting it is permanent, not "until next
 // visit". Runs after the normal deck-selection below so it never steals
 // focus from a deck a returning user already has open.
-const DEFAULT_DECK_URL = 'https://archidekt.com/decks/7404579/indominus_rex';
+const DEFAULT_DECK_URL = 'https://archidekt.com/decks/25802429/urdragon';
 const DEFAULT_DECK_SEEDED_KEY = 'edh_default_deck_seeded';
 
 async function ensureDefaultDeck() {
