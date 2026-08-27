@@ -645,7 +645,8 @@ html, body {
    Toggled via the ◂/▸ button or the C key. */
 .playtest__leftcol.leftcol-collapsed { flex: 0 0 26px; gap: 0; }
 .playtest__leftcol.leftcol-collapsed .playtest__zone--command,
-.playtest__leftcol.leftcol-collapsed .playtest__pile--tokens { display: none; }
+.playtest__leftcol.leftcol-collapsed .playtest__pile--tokens,
+.playtest__leftcol.leftcol-collapsed .counter-tray { display: none; }
 .playtest__leftcol-toggle {
   align-self: flex-end;
   background: var(--bg-card);
@@ -863,28 +864,6 @@ html, body {
   cursor: pointer;
 }
 .playtest__card-flip-badge:hover { background: var(--accent); }
-.playtest__card-counter-badge {
-  position: absolute;
-  bottom: 4px;
-  left: 4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: rgba(0, 0, 0, 0.75);
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  cursor: pointer;
-}
-.playtest__card-counter-badge:hover { background: var(--accent); }
-/* No counters yet — a faint "+" so the badge is discoverable without
-   competing with the card art for attention. */
-.playtest__card-counter-badge--empty { opacity: 0.45; font-weight: 400; }
 .playtest__card-dup-badge {
   position: absolute;
   top: 4px;
@@ -1055,42 +1034,105 @@ html, body {
 .tips-list__action { color: var(--text); }
 .tips-list__control { color: var(--text-dim); font-size: 13px; text-align: right; white-space: nowrap; }
 
-.counters-panel { max-width: 420px; }
-.counter-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.counter-row {
+/* Counter tokens — small free-floating +1/+1 / -1/-1 chips, not attached to
+   any card. The tray sits in the left column next to Tokens; dragging a
+   chip off it (or tapping it for a quick default spot) places one on the
+   Battlefield, where it can be dragged again onto/near any card. */
+.counter-tray { display: flex; gap: 6px; }
+.counter-tray__btn {
+  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: center;
   padding: 8px 4px;
-  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
-.counter-row:last-child { border-bottom: none; }
-.counter-row__label { color: var(--text); font-size: 14px; }
-.counter-row__stepper { display: flex; align-items: center; gap: 10px; }
-.counter-row__stepper button {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text);
+.counter-tray__btn.plus { background: #2f9e44; }
+.counter-tray__btn.minus { background: #c92a2a; }
+.counter-tray__btn:hover { filter: brightness(1.15); }
+
+.counter-chip--placed {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: stretch;
+  z-index: 8;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  user-select: none;
+  cursor: grab;
+}
+.counter-chip--placed.plus { background: #2f9e44; }
+.counter-chip--placed.minus { background: #c92a2a; }
+.counter-chip--placed.dragging-source { opacity: 0.25; }
+.counter-chip__half {
+  width: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+}
+.counter-chip__half:hover { background: rgba(255, 255, 255, 0.2); }
+.counter-chip__half--dec { border-radius: 999px 0 0 999px; }
+.counter-chip__half--inc { border-radius: 0 999px 999px 0; }
+.counter-chip__count { padding: 2px 3px; min-width: 12px; text-align: center; line-height: 18px; }
+
+/* Ghost shown while dragging a counter — off the tray, or repositioning
+   one already placed. Same reused-node pattern as the card drag ghost. */
+.counter-drag-ghost {
+  display: none;
+  position: fixed;
+  z-index: 320;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
-  cursor: pointer;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
-.counter-row__stepper button:hover { border-color: var(--accent); }
-.counter-row__count { min-width: 1.5em; text-align: center; font-weight: 700; }
-.counter-add { display: flex; gap: 8px; margin-top: 14px; }
-.counter-add input {
-  flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
+.counter-drag-ghost.open { display: flex; }
+.counter-drag-ghost.plus { background: #2f9e44; }
+.counter-drag-ghost.minus { background: #c92a2a; }
+
+/* Dashed line splitting the Battlefield into a bottom lane for lands and
+   the rest of the canvas for everything else — clicking a card to play it
+   (rather than dragging) lands it in the matching lane by default (see
+   getBattlefieldLaneSplit/nextCascadePosition in playtest.js), but nothing
+   stops a card from being dragged anywhere regardless of the line. */
+.playtest__battlefield-laneline {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: calc(var(--card-bf) + 20px);
+  height: 0;
+  border-top: 2px dashed var(--border);
+  pointer-events: none;
+  z-index: 1;
+}
+.playtest__battlefield-laneline__label {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* Rotate-device gate: the row-based board (Command Zone/Battlefield/side
@@ -1156,8 +1198,10 @@ html, body {
   /* Bigger tap targets — 18px is fine for a mouse pointer but too small to
      reliably hit with a finger. */
   .playtest__card-flip-badge { width: 24px; height: 24px; font-size: 13px; top: 2px; right: 2px; }
-  .playtest__card-counter-badge { min-width: 22px; height: 22px; font-size: 12px; bottom: 2px; left: 2px; }
   .playtest__card-dup-badge { width: 22px; height: 22px; font-size: 12px; top: 2px; left: 2px; }
+  .counter-chip--placed { font-size: 13px; }
+  .counter-chip__half { width: 19px; }
+  .counter-drag-ghost { width: 32px; height: 32px; font-size: 16px; }
 }
 
 /* Mobile site chrome — the sidebar becomes an off-canvas drawer (opened via

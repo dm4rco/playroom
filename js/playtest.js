@@ -99,6 +99,25 @@ function positionMarquee(el, x1, y1, x2, y2) {
   el.style.height = `${Math.abs(y2 - y1)}px`;
 }
 
+// Small floating dot shown while dragging a counter token — either a fresh
+// one from the tray, or repositioning one already on the battlefield. Same
+// reused-node pattern as the card ghost, just simpler (no image to swap).
+function ensureCounterGhostEl() {
+  let el = document.getElementById('counter-drag-ghost');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'counter-drag-ghost';
+    el.className = 'counter-drag-ghost';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function positionCounterGhost(el, x, y) {
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
 const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'];
 const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
@@ -159,7 +178,7 @@ function expand(cardList, { commander = false } = {}) {
   for (const c of cardList) {
     if (!c.data || c.data.notFound) continue;
     for (let i = 0; i < c.qty; i++) {
-      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander, tapped: false, flipped: false, isToken: false, counters: {} });
+      out.push({ uid: `p${n++}-${Math.random().toString(36).slice(2, 7)}`, name: c.name, data: c.data, commander, tapped: false, flipped: false, isToken: false });
     }
   }
   return out;
@@ -174,8 +193,20 @@ function spawnToken(tokenTemplate) {
     tapped: false,
     flipped: false,
     isToken: true,
-    counters: {},
   };
+}
+
+const COUNTER_TYPES = ['+1/+1', '-1/-1'];
+
+// Small free-floating chip, not attached to any particular card — dragged
+// onto the battlefield from the tray and then dragged again onto (or near)
+// whichever creature it's meant to buff, same as a real paper counter.
+function spawnCounterToken(type, x, y) {
+  return { id: `k${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, count: 1, x, y };
+}
+
+function isLandCard(card) {
+  return (card.data?.type_line || '').includes('Land');
 }
 
 function freshState(deck) {
@@ -192,6 +223,7 @@ function freshState(deck) {
     graveyard: [],
     exile: [],
     command: expand(commanderCards, { commander: true }),
+    counters: [],
   };
 }
 
@@ -218,19 +250,33 @@ function locateCard(state, uid) {
 
 // Default landing spot for a card played by click (no drop coordinate to go
 // on) — cascades across a loose grid so successive plays don't all pile on
-// the same spot, wrapping back to the top-left after a few rows. Kept
-// within a band ([24, 80]) that stays clear of the card's own half-height
-// at any card/canvas size actually in use (see battlefieldDropPosition for
-// the precise version used for drag-drops, which has live DOM to measure).
-function nextCascadePosition(battlefield) {
-  const cols = 6, startX = 12, startY = 24, stepX = 13, stepY = 16;
-  const n = battlefield.length;
+// the same spot, wrapping back to the top-left after a few rows. Lands
+// cascade in their own band below splitY (the dashed lane line's position,
+// live-measured — see getBattlefieldLaneSplit), everything else above it,
+// each counted and cascaded independently so a run of lands doesn't push
+// the next creature down a row. Dragging a card still lands exactly where
+// it's dropped regardless of lane — this is only the click-to-play default.
+function nextCascadePosition(battlefield, { isLand = false, splitY = 80 } = {}) {
+  const cols = 6, startX = 12, stepX = 13;
+  const laneCards = battlefield.filter(c => isLandCard(c) === isLand);
+  const n = laneCards.length;
   const col = n % cols;
-  const row = Math.floor(n / cols) % 4;
-  return { x: startX + col * stepX, y: startY + row * stepY };
+  if (isLand) {
+    const rows = 2;
+    const row = Math.floor(n / cols) % rows;
+    const top = Math.min(94, splitY + 6);
+    const stepY = rows > 1 ? (94 - top) / (rows - 1) : 0;
+    return { x: startX + col * stepX, y: top + row * stepY };
+  }
+  const rows = 4;
+  const row = Math.floor(n / cols) % rows;
+  const top = 24;
+  const bottom = Math.max(top, splitY - 6);
+  const stepY = rows > 1 ? (bottom - top) / (rows - 1) : 0;
+  return { x: startX + col * stepX, y: top + row * stepY };
 }
 
-function moveCard(state, uid, toZone, { toBottom = false, x, y } = {}) {
+function moveCard(state, uid, toZone, { toBottom = false, x, y, laneSplitY } = {}) {
   const located = locateCard(state, uid);
   if (!located || located.zone === toZone) return false;
   const { zone: fromZone, card } = located;
@@ -246,7 +292,7 @@ function moveCard(state, uid, toZone, { toBottom = false, x, y } = {}) {
     else state.library.unshift(card);
   } else {
     if (toZone === 'battlefield') {
-      const pos = (x != null && y != null) ? { x, y } : nextCascadePosition(state.battlefield);
+      const pos = (x != null && y != null) ? { x, y } : nextCascadePosition(state.battlefield, { isLand: isLandCard(card), splitY: laneSplitY });
       card.x = pos.x;
       card.y = pos.y;
     }
@@ -269,13 +315,12 @@ function reorderWithinZone(state, zone, draggedUid, targetUid, insertAfter) {
   return true;
 }
 
-// Cards carry mutable per-instance flags (tapped, flipped) that get changed
-// in place on the live objects. A snapshot has to clone each card, not just
-// the zone arrays — otherwise a later mutation of the same object would
-// silently "reach back" and corrupt an already-saved snapshot, breaking undo.
-// counters is nested, so it relies on adjustCounter() always replacing that
-// object wholesale (never mutating its keys in place) for this shallow copy
-// to be safe — same trick, no deep clone needed.
+// Cards carry mutable per-instance flags (tapped, flipped, x/y) that get
+// changed in place on the live objects. A snapshot has to clone each card,
+// not just the zone arrays — otherwise a later mutation of the same object
+// would silently "reach back" and corrupt an already-saved snapshot,
+// breaking undo. Counter tokens are flat objects too, so the same shallow
+// clone works for them.
 function cloneCard(c) {
   return { ...c };
 }
@@ -292,20 +337,18 @@ function snapshot(state) {
     graveyard: state.graveyard.map(cloneCard),
     exile: state.exile.map(cloneCard),
     command: state.command.map(cloneCard),
+    counters: state.counters.map(cloneCard),
   };
 }
 
 // ---------- Rendering (Preact) ----------
 
-function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick, onCountersClick, onDuplicateClick, selected }) {
+function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick, onDuplicateClick, selected }) {
   const showingBack = c.flipped && c.data.backImage;
   const smallImg = showingBack ? (c.data.backImageSmall || c.data.backImage) : (c.data.image_small || c.data.image);
   const fullImg = showingBack ? (c.data.backImage || c.data.backImageSmall) : (c.data.image || c.data.image_small);
   const displayName = showingBack ? (c.data.backName || c.name) : c.name;
   const onBattlefield = zone === 'battlefield';
-  // Counters (+1/+1, -1/-1, or anything custom) only make sense on a
-  // permanent, so only the battlefield gets the badge.
-  const counterTotal = onBattlefield ? Object.values(c.counters || {}).reduce((s, n) => s + n, 0) : 0;
   // Battlefield cards are freely positioned (left/top, in % of the canvas)
   // instead of flowing in a row — everywhere else keeps the normal layout.
   const slotStyle = onBattlefield ? `left:${c.x}%; top:${c.y}%;` : '';
@@ -324,9 +367,29 @@ function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick,
       >
         <img loading="lazy" src=${smallImg} alt=${displayName} />
         ${c.data.backImage ? html`<span class="playtest__card-flip-badge" title="Flip: tap this, or right-click the card" onClick=${onFlipClick} onPointerDown=${(e) => e.stopPropagation()}>⟲</span>` : ''}
-        ${onBattlefield ? html`<span class=${`playtest__card-counter-badge${counterTotal ? '' : ' playtest__card-counter-badge--empty'}`} title="Counters" onClick=${onCountersClick} onPointerDown=${(e) => e.stopPropagation()}>${counterTotal || '+'}</span>` : ''}
         ${onBattlefield ? html`<span class="playtest__card-dup-badge" title="Duplicate this card" onClick=${onDuplicateClick} onPointerDown=${(e) => e.stopPropagation()}>⧉</span>` : ''}
       </div>
+    </div>
+  `;
+}
+
+// A +1/+1 or -1/-1 counter sitting free on the battlefield — not attached
+// to any card in the data model, just visually near/over one, same as a
+// real glass bead. The two halves are separate pointer-down targets so a
+// plain tap on either adjusts the count while a real drag (past the same
+// threshold everything else uses) repositions the whole chip instead.
+function CounterChip({ t, onHalfPointerDown, onContextMenu }) {
+  return html`
+    <div
+      class=${`counter-chip counter-chip--placed ${t.type === '+1/+1' ? 'plus' : 'minus'}`}
+      style=${`left:${t.x}%; top:${t.y}%;`}
+      data-counter-id=${t.id}
+      onContextMenu=${onContextMenu}
+      title="${t.type} — tap a side to adjust, drag to move, right-click to remove"
+    >
+      <span class="counter-chip__half counter-chip__half--dec" onPointerDown=${onHalfPointerDown(-1)}>−</span>
+      <span class="counter-chip__count">${t.count}</span>
+      <span class="counter-chip__half counter-chip__half--inc" onPointerDown=${onHalfPointerDown(1)}>+</span>
     </div>
   `;
 }
@@ -362,8 +425,6 @@ function App({ deck, overlay, onExit }) {
     const saved = parseFloat(localStorage.getItem(CARD_SCALE_KEY));
     return Number.isFinite(saved) ? saved : CARD_SCALE_DEFAULT;
   });
-  const [countersFor, setCountersFor] = useState(null); // uid of the battlefield card whose counters panel is open, if any
-  const [newCounterName, setNewCounterName] = useState('');
   const [selectedUids, setSelectedUids] = useState(() => new Set()); // battlefield multi-select, via marquee drag on empty canvas
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -376,6 +437,8 @@ function App({ deck, overlay, onExit }) {
   const pendingClick = useRef(null); // { id, uid } — only used to debounce the Library pile's click-to-draw vs. double-click-to-browse
   const dragRef = useRef(null); // { uid, fromZone, startX, startY, dragging, previewImg, lastTarget, lastX, lastY, longPressTimer, longPressFired } — the in-flight pointer drag, if any
   const marqueeRef = useRef(null); // { canvasEl, startX, startY, moved } — the in-flight battlefield marquee-select, if any
+  const counterDragRef = useRef(null); // { type, startX, startY, dragging, overCanvas, canvasEl, lastX, lastY } — dragging a fresh counter off the tray
+  const counterMoveDragRef = useRef(null); // { id, halfSign, startX, startY, dragging, lastX, lastY } — repositioning (or tap-adjusting) a counter already on the battlefield
   const suppressClickUntil = useRef(0); // Date.now() cutoff — swallows the ghost click a drag or long-press-flip leaves behind
   const deckTokens = deck.tokens || [];
 
@@ -413,6 +476,22 @@ function App({ deck, overlay, onExit }) {
     setBrowsingZoneState(newZone);
   };
 
+  // Y position (in % of the canvas) of the dashed lands/permanents lane
+  // line — live-measured so it tracks the actual card size and whatever
+  // height the canvas currently has (it's flex-sized against the rest of
+  // the board, see style.css). Matches the CSS line's own
+  // bottom:calc(var(--card-bf) + 20px) so click-to-play landings agree
+  // with where the line is actually drawn.
+  const getBattlefieldLaneSplit = () => {
+    const canvas = document.querySelector('.playtest__battlefield-canvas');
+    if (!canvas) return 80;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.height) return 80;
+    const cardBf = parseFloat(getComputedStyle(canvas).getPropertyValue('--card-bf')) || 182;
+    const laneHeightPx = cardBf + 20;
+    return 100 - Math.min(70, (laneHeightPx / rect.height) * 100);
+  };
+
   // Hovering shows the full-size preview (see CardTile/TokenTile), so a
   // click's only job is the zone's primary action — no double-click
   // ambiguity to debounce, so every click fires immediately.
@@ -423,7 +502,7 @@ function App({ deck, overlay, onExit }) {
 
     if (fromZone === 'hand' || fromZone === 'command') {
       pushHistory();
-      moveCard(stateRef.current, uid, 'battlefield');
+      moveCard(stateRef.current, uid, 'battlefield', { laneSplitY: getBattlefieldLaneSplit() });
       commit();
     } else if (fromZone === 'battlefield') {
       pushHistory();
@@ -443,7 +522,7 @@ function App({ deck, overlay, onExit }) {
       commit();
     } else if (browsingZone === fromZone) {
       pushHistory();
-      moveCard(stateRef.current, uid, 'battlefield');
+      moveCard(stateRef.current, uid, 'battlefield', { laneSplitY: getBattlefieldLaneSplit() });
       commit();
     }
   };
@@ -475,35 +554,10 @@ function App({ deck, overlay, onExit }) {
     flipCard(uid);
   };
 
-  const onCountersClick = (uid) => (e) => {
-    e.stopPropagation();
-    setCountersFor(uid);
-  };
-
-  // counters is replaced wholesale rather than mutated in place — see the
-  // note on cloneCard for why that matters for undo.
-  const adjustCounter = (uid, type, delta) => {
-    const located = locateCard(stateRef.current, uid);
-    if (!located) return;
-    pushHistory();
-    const next = (located.card.counters?.[type] || 0) + delta;
-    const counters = { ...located.card.counters };
-    if (next <= 0) delete counters[type];
-    else counters[type] = next;
-    located.card.counters = counters;
-    commit();
-  };
-
-  const onAddCounterType = () => {
-    const type = newCounterName.trim();
-    if (!type) return;
-    adjustCounter(countersFor, type, 1);
-    setNewCounterName('');
-  };
-
   // A fresh copy of a battlefield card — same printed card, new instance:
-  // untapped, no counters, offset slightly so it doesn't sit exactly on top
-  // of the original.
+  // untapped, offset slightly so it doesn't sit exactly on top of the
+  // original. Counter tokens aren't attached to the card, so there's
+  // nothing counter-related to reset here.
   const onDuplicateClick = (uid) => (e) => {
     e.stopPropagation();
     const located = locateCard(stateRef.current, uid);
@@ -513,7 +567,6 @@ function App({ deck, overlay, onExit }) {
       ...cloneCard(located.card),
       uid: `d${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       tapped: false,
-      counters: {},
       x: Math.min(97, (located.card.x ?? 50) + 4),
       y: Math.min(95, (located.card.y ?? 50) + 4),
     };
@@ -538,8 +591,167 @@ function App({ deck, overlay, onExit }) {
   const onTokenClick = (template) => (e) => {
     e.stopPropagation();
     pushHistory();
-    stateRef.current.battlefield.push(spawnToken(template));
+    const token = spawnToken(template);
+    const pos = nextCascadePosition(stateRef.current.battlefield, { isLand: false, splitY: getBattlefieldLaneSplit() });
+    token.x = pos.x;
+    token.y = pos.y;
+    stateRef.current.battlefield.push(token);
     commit();
+  };
+
+  // ---------- Counter tokens ----------
+  // A small, independent parallel drag system (not the card one below) —
+  // counter tokens aren't cards, don't belong to a zone, and only ever
+  // move within the battlefield, so reusing the card system's zone/reorder
+  // logic would be more machinery than the feature needs. Two flows share
+  // the same pointer-down-then-threshold pattern as everything else here:
+  // dragging a fresh one off the tray (onCounterTray*) and repositioning
+  // (or tap-adjusting) one already placed (onCounterMove*).
+
+  const endCounterDrag = () => {
+    document.getElementById('counter-drag-ghost')?.classList.remove('open');
+    clearDropHighlights();
+    counterDragRef.current = null;
+  };
+
+  const onCounterTrayMove = (e) => {
+    const drag = counterDragRef.current;
+    if (!drag) return;
+    if (!drag.dragging) {
+      const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+      if (dist < DRAG_THRESHOLD) return;
+      drag.dragging = true;
+      const ghost = ensureCounterGhostEl();
+      ghost.textContent = drag.type === '+1/+1' ? '+' : '−';
+      ghost.className = `counter-drag-ghost ${drag.type === '+1/+1' ? 'plus' : 'minus'} open`;
+    }
+    e.preventDefault();
+    positionCounterGhost(document.getElementById('counter-drag-ghost'), e.clientX, e.clientY);
+    clearDropHighlights();
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const canvasEl = el?.closest('[data-dropzone="battlefield"]');
+    if (canvasEl) canvasEl.classList.add('drop-hover');
+    drag.canvasEl = canvasEl || null;
+    drag.lastX = e.clientX;
+    drag.lastY = e.clientY;
+  };
+
+  const onCounterTrayUp = () => {
+    const drag = counterDragRef.current;
+    window.removeEventListener('pointermove', onCounterTrayMove);
+    window.removeEventListener('pointerup', onCounterTrayUp);
+    window.removeEventListener('pointercancel', onCounterTrayCancel);
+    if (drag) {
+      pushHistory();
+      if (drag.dragging && drag.canvasEl) {
+        const rect = drag.canvasEl.getBoundingClientRect();
+        const x = Math.min(97, Math.max(3, ((drag.lastX - rect.left) / rect.width) * 100));
+        const y = Math.min(97, Math.max(3, ((drag.lastY - rect.top) / rect.height) * 100));
+        stateRef.current.counters.push(spawnCounterToken(drag.type, x, y));
+      } else if (!drag.dragging) {
+        // A plain tap on the tray, no drag — drop one near the middle as a
+        // quick default rather than requiring a precise drag every time.
+        const jitter = () => 44 + Math.random() * 12;
+        stateRef.current.counters.push(spawnCounterToken(drag.type, jitter(), jitter()));
+      }
+      commit();
+    }
+    endCounterDrag();
+  };
+
+  const onCounterTrayCancel = () => endCounterDrag();
+
+  const onCounterTrayPointerDown = (type) => (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    counterDragRef.current = { type, startX: e.clientX, startY: e.clientY, dragging: false, canvasEl: null };
+    window.addEventListener('pointermove', onCounterTrayMove, { passive: false });
+    window.addEventListener('pointerup', onCounterTrayUp);
+    window.addEventListener('pointercancel', onCounterTrayCancel);
+  };
+
+  // Tapping (no real drag) either half adjusts the count directly — a
+  // counter that would drop to 0 is removed outright, like a real bead
+  // counter with nothing left on it. Right-click removes one regardless of
+  // count, for "I dropped this on the wrong creature."
+  const adjustCounterToken = (id, delta) => {
+    pushHistory();
+    const idx = stateRef.current.counters.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const next = stateRef.current.counters[idx].count + delta;
+    if (next <= 0) stateRef.current.counters.splice(idx, 1);
+    else stateRef.current.counters[idx].count = next;
+    commit();
+  };
+
+  const onCounterTokenContextMenu = (id) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    pushHistory();
+    stateRef.current.counters = stateRef.current.counters.filter(t => t.id !== id);
+    commit();
+  };
+
+  const onCounterMoveGlobal = (e) => {
+    const drag = counterMoveDragRef.current;
+    if (!drag) return;
+    if (!drag.dragging) {
+      const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+      if (dist < DRAG_THRESHOLD) return;
+      drag.dragging = true;
+      document.querySelector(`[data-counter-id="${drag.id}"]`)?.classList.add('dragging-source');
+      const token = stateRef.current.counters.find(t => t.id === drag.id);
+      const ghost = ensureCounterGhostEl();
+      ghost.textContent = token?.type === '+1/+1' ? '+' : '−';
+      ghost.className = `counter-drag-ghost ${token?.type === '+1/+1' ? 'plus' : 'minus'} open`;
+    }
+    e.preventDefault();
+    positionCounterGhost(document.getElementById('counter-drag-ghost'), e.clientX, e.clientY);
+    drag.lastX = e.clientX;
+    drag.lastY = e.clientY;
+  };
+
+  const onCounterMoveUp = () => {
+    const drag = counterMoveDragRef.current;
+    window.removeEventListener('pointermove', onCounterMoveGlobal);
+    window.removeEventListener('pointerup', onCounterMoveUp);
+    window.removeEventListener('pointercancel', onCounterMoveCancel);
+    if (drag) {
+      if (drag.dragging) {
+        const canvas = document.querySelector('.playtest__battlefield-canvas');
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const x = Math.min(98, Math.max(2, ((drag.lastX - rect.left) / rect.width) * 100));
+          const y = Math.min(98, Math.max(2, ((drag.lastY - rect.top) / rect.height) * 100));
+          pushHistory();
+          const token = stateRef.current.counters.find(t => t.id === drag.id);
+          if (token) { token.x = x; token.y = y; }
+          commit();
+        }
+      } else {
+        adjustCounterToken(drag.id, drag.halfSign);
+      }
+      document.querySelector(`[data-counter-id="${drag.id}"]`)?.classList.remove('dragging-source');
+    }
+    document.getElementById('counter-drag-ghost')?.classList.remove('open');
+    counterMoveDragRef.current = null;
+  };
+
+  const onCounterMoveCancel = () => {
+    const drag = counterMoveDragRef.current;
+    if (drag) document.querySelector(`[data-counter-id="${drag.id}"]`)?.classList.remove('dragging-source');
+    document.getElementById('counter-drag-ghost')?.classList.remove('open');
+    counterMoveDragRef.current = null;
+  };
+
+  const onCounterTokenPointerDown = (id, halfSign) => (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    counterMoveDragRef.current = { id, halfSign, startX: e.clientX, startY: e.clientY, dragging: false };
+    window.addEventListener('pointermove', onCounterMoveGlobal, { passive: false });
+    window.addEventListener('pointerup', onCounterMoveUp);
+    window.addEventListener('pointercancel', onCounterMoveCancel);
   };
 
   // Pointer-based drag-and-drop: Pointer Events fire the same way for mouse,
@@ -807,6 +1019,7 @@ function App({ deck, overlay, onExit }) {
   const onBattlefieldCanvasPointerDown = (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (e.target.closest('[data-uid]')) return; // a card handles its own drag
+    if (e.target.closest('[data-counter-id]')) return; // a counter token handles its own drag
     marqueeRef.current = { canvasEl: e.currentTarget, startX: e.clientX, startY: e.clientY, moved: false };
     window.addEventListener('pointermove', onMarqueeMove, { passive: false });
     window.addEventListener('pointerup', onMarqueeUp);
@@ -872,7 +1085,7 @@ function App({ deck, overlay, onExit }) {
       else if (key === 'b') { setBattlefieldFullscreen(v => !v); }
       else if (key === 'm') { setState(resetGame(deck)); }
       else if (e.key === 'Delete') { e.preventDefault(); sendSelectedToGraveyard(); }
-      else if (e.key === 'Escape') { setShowTips(false); setCountersFor(null); setSelectedUids(new Set()); setBattlefieldFullscreen(false); }
+      else if (e.key === 'Escape') { setShowTips(false); setSelectedUids(new Set()); setBattlefieldFullscreen(false); }
     };
     const onPopState = () => {
       if (!overlay.classList.contains('open')) return;
@@ -898,7 +1111,9 @@ function App({ deck, overlay, onExit }) {
       <div class="playtest__main playtest__fullscreen-battlefield">
         <button class="playtest__fullscreen-exit" title="Exit fullscreen (B or Escape)" onClick=${() => setBattlefieldFullscreen(false)}>✕ Exit Fullscreen</button>
         <div class="playtest__battlefield-canvas" data-dropzone="battlefield" onPointerDown=${onBattlefieldCanvasPointerDown}>
-          ${state.battlefield.map(c => html`<${CardTile} c=${c} zone="battlefield" selected=${selectedUids.has(c.uid)} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} onDuplicateClick=${onDuplicateClick(c.uid)} />`)}
+          <div class="playtest__battlefield-laneline"><span class="playtest__battlefield-laneline__label">Lands</span></div>
+          ${state.battlefield.map(c => html`<${CardTile} c=${c} zone="battlefield" selected=${selectedUids.has(c.uid)} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onDuplicateClick=${onDuplicateClick(c.uid)} />`)}
+          ${state.counters.map(t => html`<${CounterChip} t=${t} onHalfPointerDown=${(sign) => onCounterTokenPointerDown(t.id, sign)} onContextMenu=${onCounterTokenContextMenu(t.id)} />`)}
         </div>
       </div>
     ` : html`
@@ -952,13 +1167,20 @@ function App({ deck, overlay, onExit }) {
           <strong>∞</strong>
           Tokens
         </div>
+        <div class="counter-tray" title="Counters — drag one onto the Battlefield (or a card) to place it, or just tap for a quick default spot">
+          ${COUNTER_TYPES.map(type => html`
+            <div class=${`counter-tray__btn ${type === '+1/+1' ? 'plus' : 'minus'}`} onPointerDown=${onCounterTrayPointerDown(type)}>${type}</div>
+          `)}
+        </div>
       </div>
 
       <div class="playtest__zone playtest__zone--battlefield">
         <h4>Battlefield <span class="count">${state.battlefield.length}</span></h4>
         ${state.battlefield.length ? '' : html`<span class="playtest__empty-hint">Drag a card here to play it.</span>`}
         <div class="playtest__battlefield-canvas" data-dropzone="battlefield" onPointerDown=${onBattlefieldCanvasPointerDown}>
-          ${state.battlefield.map(c => html`<${CardTile} c=${c} zone="battlefield" selected=${selectedUids.has(c.uid)} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onCountersClick=${onCountersClick(c.uid)} onDuplicateClick=${onDuplicateClick(c.uid)} />`)}
+          <div class="playtest__battlefield-laneline"><span class="playtest__battlefield-laneline__label">Lands</span></div>
+          ${state.battlefield.map(c => html`<${CardTile} c=${c} zone="battlefield" selected=${selectedUids.has(c.uid)} onClick=${onCardClick(c.uid)} onPointerDown=${onCardPointerDown(c.uid)} onContextMenu=${onCardContextMenu(c.uid)} onFlipClick=${onFlipBadgeClick(c.uid)} onDuplicateClick=${onDuplicateClick(c.uid)} />`)}
+          ${state.counters.map(t => html`<${CounterChip} t=${t} onHalfPointerDown=${(sign) => onCounterTokenPointerDown(t.id, sign)} onContextMenu=${onCounterTokenContextMenu(t.id)} />`)}
         </div>
       </div>
     </div>
@@ -1039,48 +1261,6 @@ function App({ deck, overlay, onExit }) {
         </div>
       </div>
     ` : ''}
-
-    ${countersFor ? (() => {
-      const located = locateCard(state, countersFor);
-      if (!located) return '';
-      const counters = located.card.counters || {};
-      const customTypes = Object.keys(counters).filter(t => t !== '+1/+1' && t !== '-1/-1');
-      const counterRow = (type, count) => html`
-        <li class="counter-row">
-          <span class="counter-row__label">${type}</span>
-          <span class="counter-row__stepper">
-            <button onClick=${() => adjustCounter(countersFor, type, -1)}>−</button>
-            <span class="counter-row__count">${count}</span>
-            <button onClick=${() => adjustCounter(countersFor, type, 1)}>+</button>
-          </span>
-        </li>
-      `;
-      return html`
-        <div class="zone-browser">
-          <div class="zone-browser__panel counters-panel">
-            <div class="zone-browser__header">
-              <h3>Counters — ${located.card.name}</h3>
-              <button class="btn btn--primary" onClick=${() => setCountersFor(null)}>Close</button>
-            </div>
-            <ul class="counter-list">
-              ${counterRow('+1/+1', counters['+1/+1'] || 0)}
-              ${counterRow('-1/-1', counters['-1/-1'] || 0)}
-              ${customTypes.map(t => counterRow(t, counters[t]))}
-            </ul>
-            <div class="counter-add">
-              <input
-                type="text"
-                placeholder="Custom counter (e.g. Shield, Loyalty)"
-                value=${newCounterName}
-                onInput=${(e) => setNewCounterName(e.target.value)}
-                onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); onAddCounterType(); } }}
-              />
-              <button class="btn" onClick=${onAddCounterType}>Add</button>
-            </div>
-          </div>
-        </div>
-      `;
-    })() : ''}
   `;
 }
 

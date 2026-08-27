@@ -103,10 +103,12 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     rotate; landscape gets a compact version of the same layout.
   - Hovering a hand card previews it without moving it; clicking it plays it.
     The Battlefield is a free canvas — drag a card anywhere and it stays put,
-    same as a real table (a click-to-play with no drop point just cascades
-    into a loose grid). The Command Zone still fans overlapping cards
-    instead of wrapping, since 90%+ of decks only ever have one or two
-    commanders.
+    same as a real table. A dashed line splits it into a lower lane (a bit
+    taller than one card) for lands and the rest for everything else — a
+    click-to-play with no drop point cascades into the matching lane, but
+    dragging still puts a card exactly wherever you drop it, line or no
+    line. The Command Zone still fans overlapping cards instead of
+    wrapping, since 90%+ of decks only ever have one or two commanders.
   - Marquee-select a group of battlefield cards by dragging on empty canvas
     space, then click any one of them to tap/untap the whole group together,
     or drag any one of them to move the whole group at once (keeping their
@@ -115,8 +117,8 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     straight to the Graveyard without needing to drag them there. Click
     empty space or press Escape to clear the selection.
   - Every battlefield card has a duplicate badge (top-left corner) for
-    quickly making a second copy of it — untapped, no counters, offset
-    slightly so it doesn't sit exactly on top of the original.
+    quickly making a second copy of it — untapped, offset slightly so it
+    doesn't sit exactly on top of the original.
   - Library, Graveyard, and Exile sit next to the Hand at the bottom of the
     board instead of beside the Battlefield, so the Battlefield gets the
     full width to spread cards out in (Graveyard and Exile are stacked on
@@ -153,10 +155,15 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
     their token list.
   - Closing the Library browser (or switching to browse a different zone)
     always reshuffles it, since you just searched it.
-  - Every battlefield card has a small counter badge (bottom-left corner) —
-    click it for +1/+1 and -1/-1 steppers plus a free-text field for
-    anything else (Shield, Loyalty, Experience, whatever the card grants).
-    The badge itself shows the running total once it's non-zero.
+  - +1/+1 and -1/-1 counters are physical-style tokens, not attached to any
+    card — drag one off the tray next to Tokens (or just tap it for a quick
+    default spot) to drop it on the battlefield, then drag it again onto
+    whichever creature it's for, same as a real glass bead. Tap its left/
+    right half to decrement/increment (a token that hits 0 removes itself);
+    drag it to move it; right-click to remove it outright. Since it's just
+    a marker sitting near a card rather than data attached to it, this
+    covers any number of stacked counters on one creature without needing
+    a whole per-card counter type system.
   - Advancing the turn (the + button, D, or →) untaps the whole battlefield
     automatically, like the untap step in paper Magic.
 - Opening hand is just a draw of 10, full stop — there's no forced mulligan
