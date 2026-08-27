@@ -689,6 +689,15 @@ html, body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* The canvas inside has its own min-height floor (so it can't be
+     crushed to nothing in the common case) — but on a short enough
+     viewport combined with e.g. Hand pinned open, .playtest__board's
+     flex:1 can allocate this zone less room than that floor needs.
+     Nothing before this clipped the difference, so the canvas just
+     overflowed straight past this box and visibly overlapped the Hand
+     row underneath it. This guarantees the Battlefield's own edge is a
+     hard boundary instead. */
+  overflow: hidden;
 }
 /* Battlefield is a free canvas — cards go wherever they're dropped, placed
    by percentage so they stay put proportionally as the canvas itself grows
@@ -698,6 +707,12 @@ html, body {
   position: relative;
   flex: 1;
   min-height: 220px;
+  /* Cards/counters are clamped in JS to stay within the canvas, but that's
+     percentage math against a live-measured, ever-changing height — a
+     hard clip here is what actually guarantees nothing ever bleeds past
+     the Battlefield's own edge into the Hand row underneath it, rather
+     than relying on that math being perfectly exact in every case. */
+  overflow: hidden;
 }
 .playtest__battlefield-canvas .playtest__card-slot:hover { z-index: 5; }
 
