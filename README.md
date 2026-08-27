@@ -52,8 +52,12 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   once, ever, and never comes back on its own.
 - Card data and images are pulled live from Scryfall's free API each time you
   import a deck, then cached in `localStorage` so re-opening a deck is instant.
-- "Refresh Card Data" on a deck re-fetches everything (useful if prices or
-  prints have changed).
+- "Refresh Card Data" re-fetches Scryfall data (prices, prints) for a deck.
+  If the deck was fetched from Archidekt, it also re-pulls the decklist
+  itself from Archidekt first — so cards added, removed, or changed there
+  since the last fetch show up too, not just updated prices for the list
+  already saved. A deck built from a pasted/manual decklist (no Archidekt
+  link) just refreshes Scryfall data for what's there, as before.
 - Everything is stored locally in your browser — nothing leaves your machine
   except the requests to Scryfall's API.
 - Deck import currently expects the format above (this is the same format

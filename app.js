@@ -2,7 +2,7 @@ import { parseDecklist } from './js/parser.js';
 import { fetchCardData, fetchTokenData } from './js/scryfall.js';
 import { loadDecks, upsertDeck, deleteDeck, renameDeck } from './js/storage.js';
 import { renderDeck } from './js/render.js';
-import { fetchArchidektDeck } from './js/archidekt.js';
+import { fetchArchidektDeck, parseArchidektId } from './js/archidekt.js';
 import { openPlaytest } from './js/playtest.js';
 
 const els = {
@@ -75,6 +75,9 @@ function selectDeck(name) {
   els.main.classList.remove('hidden');
   els.deckActions.classList.remove('hidden');
   els.playtestBtn.classList.remove('hidden');
+  els.refreshBtn.title = deck.sourceUrl
+    ? 'Re-fetch the latest decklist from Archidekt and refresh card data'
+    : 'Refresh card data (prices, images) for this decklist';
   renderDeck(deck, els.main);
   renderSidebar();
   closeMobileSidebar();
@@ -89,6 +92,9 @@ function showImportPanel(prefillName = '', prefillText = '', isEdit = false) {
   els.importName.value = prefillName;
   els.importText.value = prefillText;
   els.importStatus.textContent = '';
+  // A URL left over from an earlier, unrelated fetch shouldn't get
+  // silently attached as this deck's Archidekt source on Import.
+  els.archidektUrl.value = '';
 }
 
 function hideImportPanel() {
@@ -134,7 +140,13 @@ async function doImport(forceRefresh = false) {
     const tokens = tokenRefs.length ? await fetchTokenData(tokenRefs) : [];
 
     const wasEditing = editingOriginalName !== null;
-    upsertDeck(name, text, cards, tokens);
+    // Only overrides the deck's stored sourceUrl when the Archidekt field
+    // actually has a valid URL/ID in it right now (i.e. this import just
+    // came from a Fetch) — upsertDeck leaves an existing value alone
+    // otherwise, so a plain manual edit doesn't un-link the deck.
+    const archInput = els.archidektUrl.value.trim();
+    const sourceUrl = archInput && parseArchidektId(archInput) ? archInput : undefined;
+    upsertDeck(name, text, cards, tokens, sourceUrl);
     if (editingOriginalName && editingOriginalName !== name) {
       deleteDeck(editingOriginalName);
     }
@@ -174,6 +186,20 @@ els.refreshBtn.addEventListener('click', async () => {
   const deck = decks[currentDeckName];
   if (!deck) return;
   showImportPanel(deck.name, deck.rawText, true);
+  // A deck fetched from Archidekt gets a fresh pull of the decklist itself
+  // (picking up cards added/removed/swapped there since the last fetch),
+  // not just re-fetched Scryfall data for whatever was already saved —
+  // that alone is what "Refresh Card Data" used to do, which never
+  // reflected changes made on Archidekt's side.
+  if (deck.sourceUrl) {
+    els.importStatus.textContent = 'Fetching the latest decklist from Archidekt...';
+    try {
+      const { text } = await fetchArchidektDeck(deck.sourceUrl);
+      els.importText.value = text;
+    } catch (err) {
+      els.importStatus.textContent = `Could not re-fetch from Archidekt (${err.message}) — refreshing card data for the existing list instead.`;
+    }
+  }
   await doImport(true);
 });
 
@@ -283,7 +309,7 @@ async function ensureDefaultDeck() {
     for (const c of cards) c.data = cardData[c.key] || null;
     const tokenRefs = cards.flatMap(c => c.data?.tokenParts || []);
     const tokens = tokenRefs.length ? await fetchTokenData(tokenRefs) : [];
-    upsertDeck(name, text, cards, tokens);
+    upsertDeck(name, text, cards, tokens, DEFAULT_DECK_URL);
     localStorage.setItem(DEFAULT_DECK_SEEDED_KEY, '1');
     renderSidebar();
     if (!currentDeckName) selectDeck(name);

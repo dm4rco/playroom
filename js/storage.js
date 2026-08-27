@@ -9,9 +9,19 @@ function saveDecks(decks) {
   localStorage.setItem(DECKS_KEY, JSON.stringify(decks));
 }
 
-export function upsertDeck(name, rawText, cards, tokens = []) {
+// sourceUrl is the Archidekt deck URL this deck was last fetched from, if
+// any — lets "Refresh Card Data" re-pull the decklist itself, not just
+// Scryfall's data for whatever was already saved. Omit the argument
+// (rather than passing null) to leave an existing value alone, so a plain
+// manual edit doesn't silently un-link a deck from Archidekt.
+export function upsertDeck(name, rawText, cards, tokens = [], sourceUrl) {
   const decks = loadDecks();
-  decks[name] = { name, rawText, cards, tokens, updatedAt: Date.now() };
+  const existing = decks[name];
+  decks[name] = {
+    name, rawText, cards, tokens,
+    sourceUrl: sourceUrl !== undefined ? sourceUrl : (existing?.sourceUrl ?? null),
+    updatedAt: Date.now(),
+  };
   saveDecks(decks);
   return decks;
 }
