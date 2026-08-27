@@ -15,6 +15,9 @@ gallery.
 
 `qty`x `Name` (`set code`) `collector number` [optional `*F*`/`*E*` finish] `[Category]`
 
+A card with a finish shows a small F (Foil) or E (Etched foil) badge on its
+gallery tile — hover it for a tooltip spelling out which.
+
 The commander is detected from any category containing the word
 "Commander". A ready-made example is in [sample-decklist.txt](sample-decklist.txt).
 

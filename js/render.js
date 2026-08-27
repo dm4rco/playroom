@@ -44,6 +44,14 @@ function money(n) {
   return n == null ? null : `€${n.toFixed(2)}`;
 }
 
+// The little F/E badge on a card tile is its print finish — parsed from
+// the optional *F*/*E* marker in the decklist line format (see
+// parser.js), and set automatically for decks fetched from Archidekt.
+const FINISH_LABELS = { F: 'Foil', E: 'Etched foil' };
+function finishTitle(finish) {
+  return FINISH_LABELS[finish] || finish;
+}
+
 // "Owned" marks made in Export mode — keyed by set:collector (c.key, stable
 // across re-renders) rather than stored on the card objects themselves, so
 // a decklist re-import/refresh can't silently wipe them. Per deck name, so
@@ -173,7 +181,7 @@ function cardTile(c, ctx = {}) {
   return `<div class="card-cell">
     <div class="${tileClass}" data-key="${escapeHtml(c.key)}" data-full="${escapeHtml(full)}" data-uri="${escapeHtml(data.scryfall_uri)}" data-name="${escapeHtml(data.name)}" data-price="${price != null ? escapeHtml(money(price)) : ''}">
       ${c.qty > 1 ? `<span class="card-tile__qty">${c.qty}x</span>` : ''}
-      ${c.finish ? `<span class="card-tile__finish">${c.finish}</span>` : ''}
+      ${c.finish ? `<span class="card-tile__finish" title="${escapeHtml(finishTitle(c.finish))}">${c.finish}</span>` : ''}
       ${ownedBadge}
       <img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(data.name)}">
     </div>
