@@ -452,6 +452,8 @@ function App({ deck, overlay, onExit }) {
     return Number.isFinite(saved) ? saved : CARD_SCALE_DEFAULT;
   });
   const [selectedUids, setSelectedUids] = useState(() => new Set()); // battlefield multi-select, via marquee drag on empty canvas
+  const [customCounterPrompt, setCustomCounterPrompt] = useState(false); // small panel for naming a new Custom counter
+  const [customCounterName, setCustomCounterName] = useState('');
   const stateRef = useRef(state);
   stateRef.current = state;
   // Mirrors selectedUids for the keydown effect below, which is registered
@@ -715,10 +717,12 @@ function App({ deck, overlay, onExit }) {
   // Custom counters (Vigilance, Shield, Experience, whatever a card grants)
   // get a random color the first time a given name is used, then reuse it
   // for the rest of the session — so two "Shield" counters read as the
-  // same thing at a glance without the user having to pick a color. A
-  // plain click (not the tray's drag-to-place) since a mid-drag blocking
-  // prompt() would be janky; the token lands near the middle and can be
-  // dragged into place afterward like any other counter.
+  // same thing at a glance without the user having to pick a color. Naming
+  // one is a plain click that opens the small panel below (not the tray's
+  // drag-to-place, and deliberately not window.prompt() either — that's a
+  // native dialog many embedded/preview contexts silently block, which
+  // just looks like the button doing nothing at all). The token lands
+  // near the middle once named, ready to drag into place like any other.
   const getCustomCounterColor = (label) => {
     const key = label.trim().toLowerCase();
     if (!customCounterColorsRef.current.has(key)) {
@@ -729,8 +733,13 @@ function App({ deck, overlay, onExit }) {
   };
 
   const onCounterCustomClick = () => {
-    const raw = window.prompt('Counter name (e.g. Vigilance, Shield, Experience):');
-    const label = raw?.trim();
+    setCustomCounterName('');
+    setCustomCounterPrompt(true);
+  };
+
+  const submitCustomCounter = () => {
+    const label = customCounterName.trim();
+    setCustomCounterPrompt(false);
     if (!label) return;
     pushHistory();
     const jitter = () => 44 + Math.random() * 12;
@@ -1162,7 +1171,7 @@ function App({ deck, overlay, onExit }) {
       else if (key === 'b') { setBattlefieldFullscreen(v => !v); }
       else if (key === 'm') { setState(resetGame(deck)); }
       else if (e.key === 'Delete') { e.preventDefault(); sendSelectedToGraveyard(); }
-      else if (e.key === 'Escape') { setShowTips(false); setSelectedUids(new Set()); setBattlefieldFullscreen(false); }
+      else if (e.key === 'Escape') { setShowTips(false); setSelectedUids(new Set()); setBattlefieldFullscreen(false); setCustomCounterPrompt(false); }
     };
     const onPopState = () => {
       if (!overlay.classList.contains('open')) return;
@@ -1336,6 +1345,27 @@ function App({ deck, overlay, onExit }) {
           <ul class="tips-list">
             ${TIPS.map(t => html`<li><span class="tips-list__action">${t.action}</span><span class="tips-list__control">${t.control}</span></li>`)}
           </ul>
+        </div>
+      </div>
+    ` : ''}
+
+    ${customCounterPrompt ? html`
+      <div class="zone-browser" onClick=${() => setCustomCounterPrompt(false)}>
+        <div class="zone-browser__panel custom-counter-panel" onClick=${(e) => e.stopPropagation()}>
+          <div class="zone-browser__header">
+            <h3>New Custom Counter</h3>
+            <button class="btn btn--primary" onClick=${() => setCustomCounterPrompt(false)}>Close</button>
+          </div>
+          <div class="counter-add">
+            <input
+              type="text"
+              placeholder="e.g. Vigilance, Shield, Experience"
+              value=${customCounterName}
+              onInput=${(e) => setCustomCounterName(e.target.value)}
+              onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); submitCustomCounter(); } }}
+            />
+            <button class="btn btn--primary" disabled=${!customCounterName.trim()} onClick=${submitCustomCounter}>Add</button>
+          </div>
         </div>
       </div>
     ` : ''}

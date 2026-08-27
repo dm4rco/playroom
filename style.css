@@ -1066,6 +1066,23 @@ html, body {
 .counter-tray__btn.custom:hover { border-color: var(--accent); color: var(--text); }
 .counter-tray__btn.plus:hover, .counter-tray__btn.minus:hover { filter: brightness(1.15); }
 
+/* Naming a Custom counter — a real on-page panel rather than
+   window.prompt(), which plenty of embedded/preview browser contexts
+   silently block (no dialog, no error, nothing — indistinguishable from
+   the button being broken). */
+.custom-counter-panel { max-width: 420px; }
+.counter-add { display: flex; gap: 8px; }
+.counter-add input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
 .counter-chip--placed {
   position: absolute;
   transform: translate(-50%, -50%);
