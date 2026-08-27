@@ -158,12 +158,16 @@ Then open the printed URL (e.g. `http://localhost:8080` or `http://localhost:300
   - +1/+1 and -1/-1 counters are physical-style tokens, not attached to any
     card — drag one off the tray next to Tokens (or just tap it for a quick
     default spot) to drop it on the battlefield, then drag it again onto
-    whichever creature it's for, same as a real glass bead. Tap its left/
-    right half to decrement/increment (a token that hits 0 removes itself);
-    drag it to move it; right-click to remove it outright. Since it's just
-    a marker sitting near a card rather than data attached to it, this
-    covers any number of stacked counters on one creature without needing
-    a whole per-card counter type system.
+    whichever creature it's for, same as a real glass bead (grab it
+    anywhere on the chip, including the number in the middle). Tap its
+    left/right half to decrement/increment (a token that hits 0 removes
+    itself); right-click removes it outright. Since it's just a marker
+    sitting near a card rather than data attached to it, this covers any
+    number of stacked counters on one creature without needing a whole
+    per-card counter type system. "Custom" makes one with any name you
+    type (Vigilance, Shield, Experience, whatever a card grants) — it gets
+    a random color the first time, then keeps that same color for the rest
+    of the session so repeats of the same name are recognizable at a glance.
   - Advancing the turn (the + button, D, or →) untaps the whole battlefield
     automatically, like the untap step in paper Magic.
 - Opening hand is just a draw of 10, full stop — there's no forced mulligan

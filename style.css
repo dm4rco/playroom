@@ -1034,13 +1034,15 @@ html, body {
 .tips-list__action { color: var(--text); }
 .tips-list__control { color: var(--text-dim); font-size: 13px; text-align: right; white-space: nowrap; }
 
-/* Counter tokens — small free-floating +1/+1 / -1/-1 chips, not attached to
-   any card. The tray sits in the left column next to Tokens; dragging a
-   chip off it (or tapping it for a quick default spot) places one on the
-   Battlefield, where it can be dragged again onto/near any card. */
-.counter-tray { display: flex; gap: 6px; }
+/* Counter tokens — small free-floating +1/+1 / -1/-1 / custom chips, not
+   attached to any card. The tray sits in the left column next to Tokens;
+   dragging a chip off it (or tapping it for a quick default spot) places
+   one on the Battlefield, where it can be dragged again onto/near any
+   card by grabbing anywhere on it, including the count in the middle. */
+.counter-tray { display: flex; flex-wrap: wrap; gap: 6px; }
 .counter-tray__btn {
   flex: 1;
+  min-width: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1055,7 +1057,14 @@ html, body {
 }
 .counter-tray__btn.plus { background: #2f9e44; }
 .counter-tray__btn.minus { background: #c92a2a; }
-.counter-tray__btn:hover { filter: brightness(1.15); }
+.counter-tray__btn.custom {
+  background: transparent;
+  border: 1px dashed var(--text-dim);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.counter-tray__btn.custom:hover { border-color: var(--accent); color: var(--text); }
+.counter-tray__btn.plus:hover, .counter-tray__btn.minus:hover { filter: brightness(1.15); }
 
 .counter-chip--placed {
   position: absolute;
@@ -1071,12 +1080,13 @@ html, body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   user-select: none;
   cursor: grab;
+  white-space: nowrap;
 }
 .counter-chip--placed.plus { background: #2f9e44; }
 .counter-chip--placed.minus { background: #c92a2a; }
 .counter-chip--placed.dragging-source { opacity: 0.25; }
 .counter-chip__half {
-  width: 15px;
+  width: 17px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1086,7 +1096,7 @@ html, body {
 .counter-chip__half:hover { background: rgba(255, 255, 255, 0.2); }
 .counter-chip__half--dec { border-radius: 999px 0 0 999px; }
 .counter-chip__half--inc { border-radius: 0 999px 999px 0; }
-.counter-chip__count { padding: 2px 3px; min-width: 12px; text-align: center; line-height: 18px; }
+.counter-chip__count { padding: 2px 9px; min-width: 12px; text-align: center; line-height: 18px; cursor: grab; }
 
 /* Ghost shown while dragging a counter — off the tray, or repositioning
    one already placed. Same reused-node pattern as the card drag ghost. */

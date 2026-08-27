@@ -118,6 +118,22 @@ function positionCounterGhost(el, x, y) {
   el.style.top = `${y}px`;
 }
 
+// --card-bf is a calc() expression (calc(182px * var(--card-scale))), and
+// getComputedStyle(el).getPropertyValue('--card-bf') returns that as a
+// literal unresolved string ("calc(182px * 0.8)"), not a usable pixel
+// number — parseFloat on it just fails and silently falls back to the
+// unscaled 182. A throwaway probe element that actually uses the variable
+// as a real CSS property forces the browser to resolve it through layout,
+// which is the only reliable way to read it as a number.
+function measureCardBf(container) {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute; visibility:hidden; width:var(--card-bf); height:0; pointer-events:none;';
+  container.appendChild(probe);
+  const w = probe.getBoundingClientRect().width;
+  container.removeChild(probe);
+  return w || 182;
+}
+
 const ZONES = ['library', 'hand', 'battlefield', 'graveyard', 'exile', 'command'];
 const MAX_HISTORY = 50;
 const OPENING_HAND_SIZE = 10;
@@ -201,8 +217,8 @@ const COUNTER_TYPES = ['+1/+1', '-1/-1'];
 // Small free-floating chip, not attached to any particular card — dragged
 // onto the battlefield from the tray and then dragged again onto (or near)
 // whichever creature it's meant to buff, same as a real paper counter.
-function spawnCounterToken(type, x, y) {
-  return { id: `k${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, count: 1, x, y };
+function spawnCounterToken(type, x, y, extra = {}) {
+  return { id: `k${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, count: 1, x, y, ...extra };
 }
 
 function isLandCard(card) {
@@ -252,11 +268,16 @@ function locateCard(state, uid) {
 // on) — cascades across a loose grid so successive plays don't all pile on
 // the same spot, wrapping back to the top-left after a few rows. Lands
 // cascade in their own band below splitY (the dashed lane line's position,
-// live-measured — see getBattlefieldLaneSplit), everything else above it,
-// each counted and cascaded independently so a run of lands doesn't push
-// the next creature down a row. Dragging a card still lands exactly where
-// it's dropped regardless of lane — this is only the click-to-play default.
-function nextCascadePosition(battlefield, { isLand = false, splitY = 80 } = {}) {
+// live-measured — see getBattlefieldLaneMetrics), everything else above
+// it, each counted and cascaded independently so a run of lands doesn't
+// push the next creature down a row. marginYPct is the card's own
+// half-height (in % of canvas height, also live-measured) — cards are
+// positioned by their center, so the land band starts a full half-card
+// below the line, not just a small gap, or the card's top edge would
+// still poke back up across it. Dragging a card still lands exactly
+// where it's dropped regardless of lane — this is only the
+// click-to-play default.
+function nextCascadePosition(battlefield, { isLand = false, splitY = 80, marginYPct = 8 } = {}) {
   const cols = 6, startX = 12, stepX = 13;
   const laneCards = battlefield.filter(c => isLandCard(c) === isLand);
   const n = laneCards.length;
@@ -264,19 +285,20 @@ function nextCascadePosition(battlefield, { isLand = false, splitY = 80 } = {}) 
   if (isLand) {
     const rows = 2;
     const row = Math.floor(n / cols) % rows;
-    const top = Math.min(94, splitY + 6);
-    const stepY = rows > 1 ? (94 - top) / (rows - 1) : 0;
+    const bottom = 100 - marginYPct;
+    const top = Math.min(bottom, splitY + marginYPct + 2);
+    const stepY = rows > 1 ? (bottom - top) / (rows - 1) : 0;
     return { x: startX + col * stepX, y: top + row * stepY };
   }
   const rows = 4;
   const row = Math.floor(n / cols) % rows;
   const top = 24;
-  const bottom = Math.max(top, splitY - 6);
+  const bottom = Math.max(top, splitY - marginYPct - 2);
   const stepY = rows > 1 ? (bottom - top) / (rows - 1) : 0;
   return { x: startX + col * stepX, y: top + row * stepY };
 }
 
-function moveCard(state, uid, toZone, { toBottom = false, x, y, laneSplitY } = {}) {
+function moveCard(state, uid, toZone, { toBottom = false, x, y, laneSplitY, laneMarginYPct } = {}) {
   const located = locateCard(state, uid);
   if (!located || located.zone === toZone) return false;
   const { zone: fromZone, card } = located;
@@ -292,7 +314,7 @@ function moveCard(state, uid, toZone, { toBottom = false, x, y, laneSplitY } = {
     else state.library.unshift(card);
   } else {
     if (toZone === 'battlefield') {
-      const pos = (x != null && y != null) ? { x, y } : nextCascadePosition(state.battlefield, { isLand: isLandCard(card), splitY: laneSplitY });
+      const pos = (x != null && y != null) ? { x, y } : nextCascadePosition(state.battlefield, { isLand: isLandCard(card), splitY: laneSplitY, marginYPct: laneMarginYPct });
       card.x = pos.x;
       card.y = pos.y;
     }
@@ -379,16 +401,20 @@ function CardTile({ c, zone, onClick, onPointerDown, onContextMenu, onFlipClick,
 // plain tap on either adjusts the count while a real drag (past the same
 // threshold everything else uses) repositions the whole chip instead.
 function CounterChip({ t, onHalfPointerDown, onContextMenu }) {
+  const isCustom = t.type === 'custom';
+  const kindClass = t.type === '+1/+1' ? 'plus' : t.type === '-1/-1' ? 'minus' : 'custom';
+  const style = `left:${t.x}%; top:${t.y}%;${isCustom ? ` background:${t.color};` : ''}`;
+  const label = isCustom ? t.label : t.type;
   return html`
     <div
-      class=${`counter-chip counter-chip--placed ${t.type === '+1/+1' ? 'plus' : 'minus'}`}
-      style=${`left:${t.x}%; top:${t.y}%;`}
+      class=${`counter-chip counter-chip--placed ${kindClass}`}
+      style=${style}
       data-counter-id=${t.id}
       onContextMenu=${onContextMenu}
-      title="${t.type} — tap a side to adjust, drag to move, right-click to remove"
+      title="${label} — tap a side to adjust, drag anywhere on it to move, right-click to remove"
     >
       <span class="counter-chip__half counter-chip__half--dec" onPointerDown=${onHalfPointerDown(-1)}>−</span>
-      <span class="counter-chip__count">${t.count}</span>
+      <span class="counter-chip__count" onPointerDown=${onHalfPointerDown(0)}>${isCustom ? `${t.label} ${t.count}` : t.count}</span>
       <span class="counter-chip__half counter-chip__half--inc" onPointerDown=${onHalfPointerDown(1)}>+</span>
     </div>
   `;
@@ -439,6 +465,7 @@ function App({ deck, overlay, onExit }) {
   const marqueeRef = useRef(null); // { canvasEl, startX, startY, moved } — the in-flight battlefield marquee-select, if any
   const counterDragRef = useRef(null); // { type, startX, startY, dragging, overCanvas, canvasEl, lastX, lastY } — dragging a fresh counter off the tray
   const counterMoveDragRef = useRef(null); // { id, halfSign, startX, startY, dragging, lastX, lastY } — repositioning (or tap-adjusting) a counter already on the battlefield
+  const customCounterColorsRef = useRef(new Map()); // label (lowercased) -> color, assigned once per session so repeat custom counters match
   const suppressClickUntil = useRef(0); // Date.now() cutoff — swallows the ghost click a drag or long-press-flip leaves behind
   const deckTokens = deck.tokens || [];
 
@@ -477,19 +504,32 @@ function App({ deck, overlay, onExit }) {
   };
 
   // Y position (in % of the canvas) of the dashed lands/permanents lane
-  // line — live-measured so it tracks the actual card size and whatever
-  // height the canvas currently has (it's flex-sized against the rest of
-  // the board, see style.css). Matches the CSS line's own
+  // line, and the card's own half-height (also in %) — both live-measured
+  // so they track the actual card size and whatever height the canvas
+  // currently has (it's flex-sized against the rest of the board, see
+  // style.css). splitY matches the CSS line's own
   // bottom:calc(var(--card-bf) + 20px) so click-to-play landings agree
-  // with where the line is actually drawn.
-  const getBattlefieldLaneSplit = () => {
+  // with where the line is actually drawn; marginYPct is what keeps a
+  // land's card (positioned by its center) fully clear of the line
+  // instead of straddling it.
+  const getBattlefieldLaneMetrics = () => {
     const canvas = document.querySelector('.playtest__battlefield-canvas');
-    if (!canvas) return 80;
+    const fallback = { splitY: 80, marginYPct: 8 };
+    if (!canvas) return fallback;
     const rect = canvas.getBoundingClientRect();
-    if (!rect.height) return 80;
-    const cardBf = parseFloat(getComputedStyle(canvas).getPropertyValue('--card-bf')) || 182;
+    if (!rect.height) return fallback;
+    const cardBf = measureCardBf(canvas);
+    const marginYPct = Math.min(45, (cardBf / 2 / rect.height) * 100);
     const laneHeightPx = cardBf + 20;
-    return 100 - Math.min(70, (laneHeightPx / rect.height) * 100);
+    const splitY = 100 - Math.min(70, (laneHeightPx / rect.height) * 100);
+    return { splitY, marginYPct };
+  };
+
+  // moveCard/nextCascadePosition's option names, straight from the metrics
+  // above — a small convenience so call sites don't repeat the mapping.
+  const laneOptions = () => {
+    const { splitY, marginYPct } = getBattlefieldLaneMetrics();
+    return { laneSplitY: splitY, laneMarginYPct: marginYPct };
   };
 
   // Hovering shows the full-size preview (see CardTile/TokenTile), so a
@@ -502,7 +542,7 @@ function App({ deck, overlay, onExit }) {
 
     if (fromZone === 'hand' || fromZone === 'command') {
       pushHistory();
-      moveCard(stateRef.current, uid, 'battlefield', { laneSplitY: getBattlefieldLaneSplit() });
+      moveCard(stateRef.current, uid, 'battlefield', laneOptions());
       commit();
     } else if (fromZone === 'battlefield') {
       pushHistory();
@@ -522,7 +562,7 @@ function App({ deck, overlay, onExit }) {
       commit();
     } else if (browsingZone === fromZone) {
       pushHistory();
-      moveCard(stateRef.current, uid, 'battlefield', { laneSplitY: getBattlefieldLaneSplit() });
+      moveCard(stateRef.current, uid, 'battlefield', laneOptions());
       commit();
     }
   };
@@ -592,7 +632,8 @@ function App({ deck, overlay, onExit }) {
     e.stopPropagation();
     pushHistory();
     const token = spawnToken(template);
-    const pos = nextCascadePosition(stateRef.current.battlefield, { isLand: false, splitY: getBattlefieldLaneSplit() });
+    const { splitY, marginYPct } = getBattlefieldLaneMetrics();
+    const pos = nextCascadePosition(stateRef.current.battlefield, { isLand: false, splitY, marginYPct });
     token.x = pos.x;
     token.y = pos.y;
     stateRef.current.battlefield.push(token);
@@ -623,6 +664,7 @@ function App({ deck, overlay, onExit }) {
       drag.dragging = true;
       const ghost = ensureCounterGhostEl();
       ghost.textContent = drag.type === '+1/+1' ? '+' : '−';
+      ghost.style.background = ''; // clear any inline color left over from a previous custom-counter drag
       ghost.className = `counter-drag-ghost ${drag.type === '+1/+1' ? 'plus' : 'minus'} open`;
     }
     e.preventDefault();
@@ -670,6 +712,32 @@ function App({ deck, overlay, onExit }) {
     window.addEventListener('pointercancel', onCounterTrayCancel);
   };
 
+  // Custom counters (Vigilance, Shield, Experience, whatever a card grants)
+  // get a random color the first time a given name is used, then reuse it
+  // for the rest of the session — so two "Shield" counters read as the
+  // same thing at a glance without the user having to pick a color. A
+  // plain click (not the tray's drag-to-place) since a mid-drag blocking
+  // prompt() would be janky; the token lands near the middle and can be
+  // dragged into place afterward like any other counter.
+  const getCustomCounterColor = (label) => {
+    const key = label.trim().toLowerCase();
+    if (!customCounterColorsRef.current.has(key)) {
+      const hue = Math.floor(Math.random() * 360);
+      customCounterColorsRef.current.set(key, `hsl(${hue}, 60%, 38%)`);
+    }
+    return customCounterColorsRef.current.get(key);
+  };
+
+  const onCounterCustomClick = () => {
+    const raw = window.prompt('Counter name (e.g. Vigilance, Shield, Experience):');
+    const label = raw?.trim();
+    if (!label) return;
+    pushHistory();
+    const jitter = () => 44 + Math.random() * 12;
+    stateRef.current.counters.push(spawnCounterToken('custom', jitter(), jitter(), { label, color: getCustomCounterColor(label) }));
+    commit();
+  };
+
   // Tapping (no real drag) either half adjusts the count directly — a
   // counter that would drop to 0 is removed outright, like a real bead
   // counter with nothing left on it. Right-click removes one regardless of
@@ -702,8 +770,15 @@ function App({ deck, overlay, onExit }) {
       document.querySelector(`[data-counter-id="${drag.id}"]`)?.classList.add('dragging-source');
       const token = stateRef.current.counters.find(t => t.id === drag.id);
       const ghost = ensureCounterGhostEl();
-      ghost.textContent = token?.type === '+1/+1' ? '+' : '−';
-      ghost.className = `counter-drag-ghost ${token?.type === '+1/+1' ? 'plus' : 'minus'} open`;
+      if (token?.type === 'custom') {
+        ghost.textContent = token.label.charAt(0).toUpperCase();
+        ghost.style.background = token.color;
+        ghost.className = 'counter-drag-ghost open';
+      } else {
+        ghost.textContent = token?.type === '+1/+1' ? '+' : '−';
+        ghost.style.background = '';
+        ghost.className = `counter-drag-ghost ${token?.type === '+1/+1' ? 'plus' : 'minus'} open`;
+      }
     }
     e.preventDefault();
     positionCounterGhost(document.getElementById('counter-drag-ghost'), e.clientX, e.clientY);
@@ -728,7 +803,9 @@ function App({ deck, overlay, onExit }) {
           if (token) { token.x = x; token.y = y; }
           commit();
         }
-      } else {
+      } else if (drag.halfSign) {
+        // halfSign is 0 for a tap on the middle "grab" area — that's just
+        // a click that didn't turn into a drag, not an adjustment.
         adjustCounterToken(drag.id, drag.halfSign);
       }
       document.querySelector(`[data-counter-id="${drag.id}"]`)?.classList.remove('dragging-source');
@@ -841,7 +918,7 @@ function App({ deck, overlay, onExit }) {
   // onPointerUpGlobal, which clamps every card in the group the same way.
   const canvasMargins = (target) => {
     const rect = target.el.getBoundingClientRect();
-    const cardHalf = (parseFloat(getComputedStyle(target.el).getPropertyValue('--card-bf')) || 182) / 2;
+    const cardHalf = measureCardBf(target.el) / 2;
     return { marginXPct: Math.min(45, (cardHalf / rect.width) * 100), marginYPct: Math.min(45, (cardHalf / rect.height) * 100) };
   };
 
@@ -1167,10 +1244,11 @@ function App({ deck, overlay, onExit }) {
           <strong>∞</strong>
           Tokens
         </div>
-        <div class="counter-tray" title="Counters — drag one onto the Battlefield (or a card) to place it, or just tap for a quick default spot">
+        <div class="counter-tray">
           ${COUNTER_TYPES.map(type => html`
-            <div class=${`counter-tray__btn ${type === '+1/+1' ? 'plus' : 'minus'}`} onPointerDown=${onCounterTrayPointerDown(type)}>${type}</div>
+            <div class=${`counter-tray__btn ${type === '+1/+1' ? 'plus' : 'minus'}`} onPointerDown=${onCounterTrayPointerDown(type)} title="Drag onto the Battlefield (or a card) to place it, or just tap for a quick default spot">${type}</div>
           `)}
+          <div class="counter-tray__btn custom" onClick=${onCounterCustomClick} title="Name your own counter (Vigilance, Shield, Experience, ...) — it gets its own color, reused for the rest of the session">Custom</div>
         </div>
       </div>
 
