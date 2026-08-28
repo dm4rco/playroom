@@ -2,10 +2,15 @@
 // route through a public CORS proxy. This is a soft dependency: if the proxy
 // is ever down, the user can still paste a decklist manually.
 // corsproxy.io started requiring a paid API key (every request now 401s with
-// "A valid API key is required"), so this points at corsfix.com instead —
-// note it wants the target URL appended raw, not URI-encoded, unlike
-// corsproxy.io's old ?url= param.
-const CORS_PROXY = 'https://proxy.corsfix.com/?';
+// "A valid API key is required"). corsfix.com (tried next) works great but
+// requires the calling domain to be pre-registered in a dashboard — it only
+// ever worked here because their free tier allows localhost unconditionally
+// for local dev; deployed on GitHub Pages it 403s with "domain_not_registered".
+// Jina's read-only content proxy needs no registration and works from any
+// origin, at the cost of wrapping the response in its own "Title/URL Source/
+// Markdown Content" envelope instead of returning it raw — see the JSON.parse
+// below, which just skips to the first "{" to pull the real payload back out.
+const CORS_PROXY = 'https://r.jina.ai/';
 
 // These are never real deck contents, so they're excluded unconditionally —
 // even if a deck's own category settings mark them as included.
@@ -33,7 +38,14 @@ export async function fetchArchidektDeck(idOrUrl) {
   }
   if (!res.ok) throw new Error(`Archidekt fetch failed (HTTP ${res.status}). Is the deck public?`);
 
-  const data = await res.json();
+  const body = await res.text();
+  const jsonStart = body.indexOf('{');
+  let data;
+  try {
+    data = JSON.parse(body.slice(jsonStart));
+  } catch {
+    throw new Error('Could not parse the response from Archidekt.');
+  }
   if (!Array.isArray(data.cards)) throw new Error('Unexpected response from Archidekt.');
 
   const excludedCats = new Set([
