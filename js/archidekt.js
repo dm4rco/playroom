@@ -1,7 +1,11 @@
 // Archidekt's API doesn't allow cross-origin requests from other sites, so we
 // route through a public CORS proxy. This is a soft dependency: if the proxy
 // is ever down, the user can still paste a decklist manually.
-const CORS_PROXY = 'https://corsproxy.io/?url=';
+// corsproxy.io started requiring a paid API key (every request now 401s with
+// "A valid API key is required"), so this points at corsfix.com instead —
+// note it wants the target URL appended raw, not URI-encoded, unlike
+// corsproxy.io's old ?url= param.
+const CORS_PROXY = 'https://proxy.corsfix.com/?';
 
 // These are never real deck contents, so they're excluded unconditionally —
 // even if a deck's own category settings mark them as included.
@@ -23,7 +27,7 @@ export async function fetchArchidektDeck(idOrUrl) {
   const apiUrl = `https://archidekt.com/api/decks/${id}/`;
   let res;
   try {
-    res = await fetch(CORS_PROXY + encodeURIComponent(apiUrl));
+    res = await fetch(CORS_PROXY + apiUrl);
   } catch {
     throw new Error('Could not reach Archidekt (the CORS proxy may be down). Try again, or paste the decklist manually.');
   }
